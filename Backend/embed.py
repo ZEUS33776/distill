@@ -1,9 +1,18 @@
 import requests
 import os
+# import pinecone 
+import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")  # or paste it directly as string
+
+
+COHERE_API_KEY = os.getenv("COHERE_API_KEY") 
+# PINECONE_API_KEY = os.getenv("PINECONE_API_KEY") 
+
+
+# pinecone.init(api_key=PINECONE_API_KEY, environment="us-east-1-aws")
+# index= pinecone.Index("chatbot-index")
 
 headers = {
     "Authorization": f"Bearer {COHERE_API_KEY}",
@@ -11,17 +20,18 @@ headers = {
 }
 
 def embed_text(texts):
+    input_texts = [t if isinstance(t, str) else t["text"] for t in texts]
+
     data = {
-        "texts": texts,
-        "model": "embed-english-v3.0",  # or use "embed-english-light-v3.0" for 128d embeddings
-        "input_type": "search_document"  # or "search_query", "classification"
+        "texts": input_texts,
+        "model": "embed-english-v3.0",
+        "input_type": "search_document"
     }
+
     response = requests.post("https://api.cohere.ai/v1/embed", headers=headers, json=data)
     response.raise_for_status()
-    return response.json()["embeddings"]
 
-if __name__ == "__main__":
-    texts = ["This is a test sentence.", "Another sentence."]
-    embeddings = embed_text(texts)
-    print(f"Embedding (first vector): {embeddings[0][:10]}...")  # first 10 dims
-    print(f"Embedding length: {len(embeddings[0])}")  # 1024 or 128
+    embeddings = response.json()["embeddings"]
+    
+    # Return list of dicts with text + embedding
+    return [{"text": input_texts[i], "embedding": embeddings[i]} for i in range(len(input_texts))]

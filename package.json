@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "pinecone": "^0.1.0",
+    "pinecone-client": "^2.0.0"
+  }
+}

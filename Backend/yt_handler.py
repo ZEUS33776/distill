@@ -90,11 +90,14 @@ def process_youtube_video(url):
             print("No auto-captions found.")
             transcript = ""
 
-    # Step 3: Store in file
+    # Step 3: Store in file with metadata at top
     os.makedirs("parsed_files", exist_ok=True)
     filename = os.path.join("parsed_files", f"{video_id}.txt")
+
     with open(filename, "w", encoding="utf-8") as f:
+        f.write(f"### SOURCE: youtube\n### URL: {url}\n\n")
         f.write(transcript)
+
     print(f"Transcript saved to {filename}")
     return transcript
 
