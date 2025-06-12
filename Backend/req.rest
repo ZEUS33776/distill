@@ -1,3 +1,65 @@
-curl -X POST "http://localhost:8000/youtube_to_embeddings/" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://www.youtube.com/watch?v=9EqrUK7ghho", "chunk_size": 500}'
+# # Test YouTube ingestion
+# GET http://localhost:8000/process_youtube_video/?url=https://www.youtube.com/watch?v=9EqrUK7ghho
+
+# ###
+
+# # Test PDF upload
+# POST http://localhost:8000/process_pdf/
+# Content-Type: multipart/form-data; boundary=boundary
+
+# --boundary
+# Content-Disposition: form-data; name="file"; filename="document.pdf"
+# Content-Type: application/pdf
+
+# < D:\distill\Backend\pdfs\978-1-5275-0932-0-sample.pdf
+# --boundary
+# Content-Disposition: form-data; name="source_name"
+
+# Machine Learning Textbook
+# --boundary--
+
+# ###
+
+# # Test PDF validation only
+# POST http://localhost:8000/validate_pdf/
+# Content-Type: multipart/form-data; boundary=boundary
+
+# --boundary
+# Content-Disposition: form-data; name="file"; filename="document.pdf"
+# Content-Type: application/pdf
+
+# < D:\distill\Backend\pdf\978-1-5275-0932-0-sample.pdf
+# --boundary--
+
+# ###
+
+# # Process all ingested content to embeddings
+# POST http://localhost:8000/content_to_embeddings/
+# Content-Type: application/json
+
+# {
+#     "chunk_size": 500,
+#     "batch_size": 64
+# }
+
+# ###
+
+# # Legacy YouTube route (for backward compatibility)
+# POST http://localhost:8000/youtube_to_embeddings_legacy/
+# Content-Type: application/json
+
+# {
+#     "url": "https://www.youtube.com/watch?v=9EqrUK7ghho",
+#     "chunk_size": 500,
+#     "batch_size": 64
+# }
+
+
+POST http://localhost:8000/query-llm
+Content-Type: application/json
+
+{
+    "query": "I need a quick review of the concept of recursion with flashnotes",
+    "user_id": "123",
+    "session_id": "456"
+}

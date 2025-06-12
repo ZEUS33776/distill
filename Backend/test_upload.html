@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Upload Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .result { margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .success { background-color: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <h2>PDF Upload Test</h2>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Select PDF File:</label>
+            <input type="file" id="file" name="file" accept=".pdf" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="source_name">Source Name (Optional):</label>
+            <input type="text" id="source_name" name="source_name" placeholder="e.g., Machine Learning Textbook">
+        </div>
+        
+        <button type="submit">Upload and Process PDF</button>
+    </form>
+    
+    <div id="result" class="result" style="display: none;"></div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('file');
+            const sourceNameInput = document.getElementById('source_name');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                alert('Please select a PDF file');
+                return;
+            }
+            
+            formData.append('file', fileInput.files[0]);
+            if (sourceNameInput.value) {
+                formData.append('source_name', sourceNameInput.value);
+            }
+            
+            try {
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'result';
+                resultDiv.innerHTML = 'Processing PDF... Please wait.';
+                
+                const response = await fetch('http://localhost:8000/process_pdf/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h4>Success!</h4>
+                        <p><strong>Message:</strong> ${result.message}</p>
+                        <p><strong>Filename:</strong> ${result.filename}</p>
+                        <p><strong>Text Length:</strong> ${result.text_length} characters</p>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<h4>Error:</h4><p>${result.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h4>Network Error:</h4><p>${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html> 

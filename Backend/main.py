@@ -1,14 +1,17 @@
-from yt_handler import process_youtube_video
-from read_and_chunk import read_and_chunk_files
-from fastapi import FastAPI,Body
-from embed import embed_text
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from store_embeddings import store_embeddings
-import os
+from auth.routes import router as auth_router
+from routes.health import router as health_router
+from routes.ingestion import router as ingestion_router
+from routes.processing import router as processing_router
+from routes.llm import router as llm_router
+from Database.connection import db
 
-
-app= FastAPI()
-
+app = FastAPI(
+    title="PDF & YouTube Knowledge Base API",
+    description="API for processing PDFs, YouTube videos, and querying with LLM",
+    version="1.0.0"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,93 +21,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database lifecycle events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database connection pool on startup"""
+    await db.create_pool()
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Close database connection pool on shutdown"""
+    await db.close_pool()
 
-
-@app.get("/process_youtube_video/")
-def process_youtube_video_endpoint(url: str):
-    """
-    Endpoint to process a YouTube video URL and return the transcript.
-    """
-    try:
-        transcript = process_youtube_video(url) 
-        return {"transcript": transcript}
-    except Exception as e:
-        return {"error": str(e)}
-    
-
-
-
-@app.get("/read_and_chunk_files/")
-def read_and_chunk_files_endpoint(folder_path: str, chunk_size: int = 500):
-    """
-    Endpoint to read and chunk text files in a specified folder.
-    """
-    try:
-        chunks = read_and_chunk_files(folder_path, chunk_size)
-        return {"chunks": chunks}
-    except Exception as e:
-        return {"error": str(e)}    
-    
-
-@app.post("/embed_text/")
-def embed_text_endpoint(texts: list):
-    """
-    Endpoint to embed a list of texts using the Cohere API.
-    """
-    try:
-        
-        embeddings = embed_text(texts)
-        return {"embeddings": embeddings}
-    except Exception as e:
-        return {"error": str(e)}
-@app.post("/youtube_to_embeddings/")
-def youtube_to_embeddings(
-    url: str = Body(...),
-    chunk_size: int = Body(500),
-    batch_size: int = Body(64)
-):
-    """
-    Full pipeline endpoint:
-    - Process YouTube video URL to get transcript
-    - Save transcript file with metadata
-    - Read and chunk that file
-    - Embed chunks in batches
-    - Store embeddings to Pinecone
-    """
-    try:
-        # Step 1: Save transcript (with metadata header)
-        transcript = process_youtube_video(url)
-
-        # Step 2: Chunk from file
-        chunks = read_and_chunk_files(folder_path="./parsed_files", chunk_size=chunk_size)
-        print(f"Chunks created: {len(chunks)}")
-
-        # Step 3: Embed in batches
-        embeddings_with_metadata = []
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
-            texts = [chunk["text"] for chunk in batch]
-            print(f"Embedding batch {i//batch_size+1} of size {len(texts)}")
-            batch_embeddings = embed_text(texts)
-
-            for chunk, embedding in zip(batch, batch_embeddings):
-                embeddings_with_metadata.append({
-                    "chunk_id": chunk["chunk_id"],
-                    "filename": chunk.get("filename"),
-                    "source": chunk.get("source"),
-                    "url": chunk.get("url"),
-                    "text": chunk["text"],
-                    "embedding": embedding["embedding"],
-                })
-
-        # ✅ Step 4: Store to Pinecone
-        store_embeddings(embeddings_with_metadata)
-
-        return {
-            "num_chunks": len(embeddings_with_metadata),
-            "first_vector": embeddings_with_metadata[0]
-        }
-
-    except Exception as e:
-        return {"error": str(e)}
+# Include all route modules
+app.include_router(health_router, tags=["Health"])
+app.include_router(auth_router, tags=["Authentication"])
+app.include_router(ingestion_router, tags=["Content Ingestion"])
+app.include_router(processing_router, tags=["Text Processing"])
+app.include_router(llm_router, tags=["LLM Queries"])

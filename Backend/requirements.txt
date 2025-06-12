@@ -1,0 +1,18 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+requests==2.31.0
+python-dotenv==1.0.0
+cohere==4.37.0
+pinecone-client==3.0.0
+yt-dlp==2023.11.16
+youtube-transcript-api==0.6.1
+PyPDF2==3.0.1
+PyMuPDF==1.23.8
+# Authentication dependencies
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+email-validator==2.0.0
+# Database dependencies
+asyncpg==0.29.0
+psycopg2-binary==2.9.9 
