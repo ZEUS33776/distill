@@ -6,6 +6,7 @@ from routes.ingestion import router as ingestion_router
 from routes.processing import router as processing_router
 from routes.llm import router as llm_router
 from Database.connection import db
+from routes.handle_session import router as handle_session_router
 
 app = FastAPI(
     title="PDF & YouTube Knowledge Base API",
@@ -30,7 +31,15 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Close database connection pool on shutdown"""
-    await db.close_pool()
+    print("🔄 Shutting down application...")
+    try:
+        await db.close_pool()
+        print("✅ Application shutdown complete")
+    except Exception as e:
+        print(f"⚠️ Error during shutdown: {e}")
+        # Force exit if needed
+        import sys
+        sys.exit(0)
 
 # Include all route modules
 app.include_router(health_router, tags=["Health"])
@@ -38,3 +47,4 @@ app.include_router(auth_router, tags=["Authentication"])
 app.include_router(ingestion_router, tags=["Content Ingestion"])
 app.include_router(processing_router, tags=["Text Processing"])
 app.include_router(llm_router, tags=["LLM Queries"])
+app.include_router(handle_session_router, tags=["Session Management"])

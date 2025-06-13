@@ -1,20 +1,21 @@
 from fastapi import APIRouter, Body
-from LLM.query_llm import query_llm
 
 router = APIRouter()
 
 @router.post("/query-llm")
-def query_llm_endpoint(query: str = Body(...), user_id: str = Body(...), session_id: str = Body(...)):
+async def query_llm_endpoint(query: str = Body(...), user_id: str = Body(...), session_id: str = Body(...)):
     """
-    Synchronous endpoint to query the LLM.
-    Uses synchronous database operations with psycopg2.
+    Asynchronous endpoint to query the LLM.
+    Uses asynchronous database operations with asyncpg.
     """
     try:
-        response = query_llm(query, user_id, session_id)
+        from LLM.query_llm import query_llm
+        response = await query_llm(query, user_id, session_id)
         return {"response": response}
     except Exception as e:
         return {"error": str(e)}
 
+# Keep the async endpoint with a different name for backward compatibility
 @router.post("/query-llm-async")
 async def query_llm_async_endpoint(query: str = Body(...), user_id: str = Body(...), session_id: str = Body(...)):
     """
@@ -22,8 +23,8 @@ async def query_llm_async_endpoint(query: str = Body(...), user_id: str = Body(.
     Uses asynchronous database operations with asyncpg.
     """
     try:
-        from LLM.query_llm import query_llm_with_async_db
-        response = await query_llm_with_async_db(query, user_id, session_id)
+        from LLM.query_llm import query_llm
+        response = await query_llm(query, user_id, session_id)
         return {"response": response}
     except Exception as e:
         return {"error": str(e)} 

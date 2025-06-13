@@ -3,18 +3,18 @@ from fastapi import APIRouter
 router = APIRouter()
 
 @router.get("/")
-def read_root():
+async def root():
     """
-    Root endpoint with API information.
+    Root endpoint providing API information.
     """
     return {
-        "message": "PDF & YouTube Knowledge Base API",
+        "message": "Distill API is running",
+        "version": "1.0.0",
         "endpoints": {
-            "youtube": "/process_youtube_video/",
-            "pdf": "/process_pdf/",
-            "pdf_validate": "/validate_pdf/",
-            "embeddings": "/content_to_embeddings/",
-            "chunks": "/read_and_chunk_files/"
-        },
-        "status": "ready"
+            "health": "/",
+            "llm": "/query-llm",
+            "ingestion": ["/process_youtube_video/", "/process_pdf/", "/validate_pdf/"],
+            "processing": ["/content_to_embeddings/", "/youtube_to_embeddings_legacy/"],
+            "sessions": ["/create_session", "/update_session_topic"]
+        }
     } 

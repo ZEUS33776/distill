@@ -93,7 +93,7 @@ def extract_text_from_pdf(pdf_path):
     
     return text.strip()
 
-def process_pdf_file(pdf_path, source_name=None):
+def process_pdf_file(pdf_path, source_name=None,user_id=None):
     """
     Process a PDF file and save the extracted text to parsed_files directory
     with metadata header.
@@ -126,6 +126,7 @@ def process_pdf_file(pdf_path, source_name=None):
             f.write(f"### SOURCE: pdf\n")
             f.write(f"### FILENAME: {source_name}\n")
             f.write(f"### ORIGINAL_PATH: {pdf_path}\n\n")
+            f.write(f"### USER_ID: {user_id}\n\n")
             f.write(text)
         
         print(f"✅ PDF text extracted and saved to {output_filename}")

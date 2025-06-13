@@ -7,7 +7,7 @@ import tempfile
 router = APIRouter()
 
 @router.get("/process_youtube_video/")
-def process_youtube_video_endpoint(url: str):
+async def process_youtube_video_endpoint(url: str):
     """
     Endpoint to process a YouTube video URL and save the transcript to parsed_files.
     """
@@ -24,7 +24,8 @@ def process_youtube_video_endpoint(url: str):
 @router.post("/process_pdf/")
 async def process_pdf_endpoint(
     file: UploadFile = File(...),
-    source_name: str = Body(None)
+    source_name: str = Body(None),
+    user_id: str = Body(None)
 ):
     """
     Endpoint to process an uploaded PDF file and save the text to parsed_files.
@@ -57,7 +58,7 @@ async def process_pdf_endpoint(
         
         try:
             # Process the PDF
-            text = process_pdf_file(temp_path, source_name)
+            text = process_pdf_file(temp_path, source_name,user_id)
             
             return {
                 "success": True,

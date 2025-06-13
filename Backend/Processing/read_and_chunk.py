@@ -27,6 +27,8 @@ def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limi
                     original_filename = line.split(":", 1)[1].strip()
                 elif line.startswith("### ORIGINAL_PATH:"):
                     original_path = line.split(":", 1)[1].strip()
+                elif line.startswith("### USER_ID:"):
+                    user_id = line.split(":", 1)[1].strip()
                 elif line.strip() and not line.startswith("###"):
                     content_lines.append(line.strip())
 
@@ -50,7 +52,8 @@ def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limi
                         "chunk_id": chunk_id,
                         "text": chunk_text,
                         "source": source,
-                        "type": "data"
+                        "type": "data",
+                        "user_id": user_id
                     }
                     
                     # Add source-specific metadata

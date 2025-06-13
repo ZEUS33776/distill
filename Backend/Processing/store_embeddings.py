@@ -11,14 +11,11 @@ pinecone_api_key = os.getenv("PINECONE_API_KEY")
 # Initialize Pinecone client
 pc = Pinecone(api_key=pinecone_api_key)
 
-def store_embeddings(embeddings,user_id,session_id, index_name="chatbot-index"):
+def store_embeddings(embeddings, user_id, session_id, index_name="chatbot-index"):
     """
     Store embeddings in Pinecone index.
     """
     index = pc.Index(index_name)
-    #creating a namespace for the user if it doesn't exist
-    index.create_namespace(namespace=user_id,dimension=1024)
-    
     
     # Prepare vectors for upsert
     items = [
@@ -41,13 +38,9 @@ def store_embeddings(embeddings,user_id,session_id, index_name="chatbot-index"):
         for emb in embeddings
     ]
 
-    index.upsert(vectors=items,namespace=user_id)
-    print(f"✅ Stored {len(items)} embeddings in index '{index_name}'")
-
-    
-    #creating a namespace for the user if it doesn't exist
-    
-    
+    # Upsert vectors to user's namespace (namespace is created automatically)
+    index.upsert(vectors=items, namespace=user_id)
+    print(f"✅ Stored {len(items)} embeddings in index '{index_name}' namespace '{user_id}'")
 
 def create_index_if_not_exists(index_name="chatbot-index", dimension=1024):
     """

@@ -1,24 +1,50 @@
-from fastapi import APIRouter, Body
+from fastapi import APIRouter
+from pydantic import BaseModel
 from Database.connection import db
 from datetime import datetime
 import uuid
-app=APIRouter()
 
-@app.post("/create_session")
-def create_session(user_id:str):
+router = APIRouter()
+
+class CreateSessionRequest(BaseModel):
+    user_id: str
+
+class UpdateSessionTopicRequest(BaseModel):
+    session_id: str
+    topic: str
+
+@router.post("/create_session")
+async def create_session(request: CreateSessionRequest):
+    """
+    Create a new session for a user (async version).
+    """
     try:
-        session_id=str(uuid.uuid4())
-        db.execute("INSERT INTO sessions (session_id,user_id,created_at,topic,is_active) VALUES (%s,%s,%s,%s,%s)",(session_id,user_id,datetime.now(),"New chat",True))
-        db.commit()
-        return {"session_id":session_id}
+        session_id = str(uuid.uuid4())
+        
+        # Use async database connection
+        async with db.get_connection() as conn:
+            await conn.execute(
+                "INSERT INTO sessions (session_id, user_id, created_at, topic, is_active) VALUES ($1, $2, $3, $4, $5)",
+                session_id, request.user_id, datetime.now(), "New chat", True
+            )
+        
+        return {"session_id": session_id, "success": True}
     except Exception as e:
-        return {"error":str(e)}
+        return {"error": str(e)}
     
-@app.post("/update_session_topic")
-def update_session_topic(session_id: str = Body(...), topic: str = Body(...)):
+@router.post("/update_session_topic")
+async def update_session_topic(request: UpdateSessionTopicRequest):
+    """
+    Update the topic of an existing session (async version).
+    """
     try:
-        db.execute("UPDATE sessions SET topic = %s WHERE session_id = %s", (topic, session_id))
-        db.commit()
+        # Use async database connection
+        async with db.get_connection() as conn:
+            await conn.execute(
+                "UPDATE sessions SET topic = $1 WHERE session_id = $2", 
+                request.topic, request.session_id
+            )
+        
         return {"success": True, "message": "Session topic updated"}
     except Exception as e:
         return {"error": str(e)}

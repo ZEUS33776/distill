@@ -3,21 +3,24 @@
 
 # ###
 
-# # Test PDF upload
+# Test PDF upload
 # POST http://localhost:8000/process_pdf/
 # Content-Type: multipart/form-data; boundary=boundary
 
 # --boundary
-# Content-Disposition: form-data; name="file"; filename="document.pdf"
+# Content-Disposition: form-data; name="file"; filename="sample.pdf"
 # Content-Type: application/pdf
 
-# < D:\distill\Backend\pdfs\978-1-5275-0932-0-sample.pdf
+# < D:\distill\Backend\PDF\sample.pdf
 # --boundary
 # Content-Disposition: form-data; name="source_name"
 
 # Machine Learning Textbook
-# --boundary--
+# --boundary
+# Content-Disposition: form-data; name="user_id"
 
+# 02d55edc-75c9-41bb-83f9-35907a0c4fa6
+# --boundary--
 # ###
 
 # # Test PDF validation only
@@ -34,15 +37,16 @@
 # ###
 
 # # Process all ingested content to embeddings
-# POST http://localhost:8000/content_to_embeddings/
-# Content-Type: application/json
+POST http://localhost:8000/content_to_embeddings/
+Content-Type: application/json
 
-# {
-#     "chunk_size": 500,
-#     "batch_size": 64
-# }
-
-# ###
+{
+    "chunk_size": 500,
+    "batch_size": 64,
+    "user_id": "02d55edc-75c9-41bb-83f9-35907a0c4fa6",
+    "session_id": "13c58cca-a663-4fc9-8c95-155a0ad791ff"
+}
+###
 
 # # Legacy YouTube route (for backward compatibility)
 # POST http://localhost:8000/youtube_to_embeddings_legacy/
@@ -54,12 +58,18 @@
 #     "batch_size": 64
 # }
 
+# POST http://localhost:8000/create_session
+# Content-Type: application/json
 
-POST http://localhost:8000/query-llm
+# {
+#     "user_id": "02d55edc-75c9-41bb-83f9-35907a0c4fa6"
+# }
+
+POST http://localhost:8000/query-llm-async
 Content-Type: application/json
 
 {
-    "query": "I need a quick review of the concept of recursion with flashnotes",
-    "user_id": "123",
-    "session_id": "456"
+    "query": "Tell me about educational psychology and tell me if the context given to you was relevant to the query",
+    "user_id":"02d55edc-75c9-41bb-83f9-35907a0c4fa6",
+    "session_id": "13c58cca-a663-4fc9-8c95-155a0ad791ff"
 }

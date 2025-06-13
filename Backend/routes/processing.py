@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Body
+from pydantic import BaseModel
 from Processing.read_and_chunk import read_and_chunk_files
 from Processing.embed import embed_text
 from Processing.store_embeddings import store_embeddings
@@ -6,13 +7,14 @@ from Ingestion.yt_handler import process_youtube_video
 
 router = APIRouter()
 
-
+class ContentToEmbeddingsRequest(BaseModel):
+    chunk_size: int = 500
+    batch_size: int = 64
+    user_id: str
+    session_id: str
 
 @router.post("/content_to_embeddings/")
-def content_to_embeddings(
-    chunk_size: int = Body(500),
-    batch_size: int = Body(64)
-):
+async def content_to_embeddings(request: ContentToEmbeddingsRequest):
     """
     Process all content in parsed_files folder:
     - Read and chunk all files in parsed_files
@@ -24,7 +26,7 @@ def content_to_embeddings(
     """
     try:
         # Step 1: Chunk all files in parsed_files
-        chunks = read_and_chunk_files(folder_path="./parsed_files", chunk_size=chunk_size)
+        chunks = read_and_chunk_files(folder_path="./parsed_files", chunk_size=request.chunk_size)
         print(f"Chunks created: {len(chunks)}")
         
         if not chunks:
@@ -32,10 +34,10 @@ def content_to_embeddings(
 
         # Step 2: Embed in batches
         embeddings_with_metadata = []
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
+        for i in range(0, len(chunks), request.batch_size):
+            batch = chunks[i:i + request.batch_size]
             texts = [chunk["text"] for chunk in batch]
-            print(f"Embedding batch {i//batch_size+1} of size {len(texts)}")
+            print(f"Embedding batch {i//request.batch_size+1} of size {len(texts)}")
             batch_embeddings = embed_text(texts)
 
             for chunk, embedding in zip(batch, batch_embeddings):
@@ -44,6 +46,8 @@ def content_to_embeddings(
                     "filename": chunk.get("filename"),
                     "source": chunk.get("source"),
                     "text": chunk["text"],
+                    "user_id": request.user_id,
+                    "session_id": request.session_id,
                     "embedding": embedding["embedding"],
                 }
                 
@@ -57,7 +61,7 @@ def content_to_embeddings(
                 embeddings_with_metadata.append(embedding_entry)
 
         # Step 3: Store to Pinecone
-        store_embeddings(embeddings_with_metadata)
+        store_embeddings(embeddings_with_metadata, user_id=request.user_id,session_id=request.session_id)
 
         return {
             "success": True,
@@ -69,49 +73,3 @@ def content_to_embeddings(
     except Exception as e:
         return {"error": str(e)}
 
-@router.post("/youtube_to_embeddings_legacy/")
-def youtube_to_embeddings_legacy(
-    url: str = Body(...),
-    chunk_size: int = Body(500),
-    batch_size: int = Body(64)
-):
-    """
-    LEGACY: Full pipeline endpoint for YouTube only.
-    Consider using /process_youtube_video/ followed by /content_to_embeddings/ instead.
-    """
-    try:
-        # Step 1: Save transcript (with metadata header)
-        transcript = process_youtube_video(url)
-
-        # Step 2: Chunk from file
-        chunks = read_and_chunk_files(folder_path="./parsed_files", chunk_size=chunk_size)
-        print(f"Chunks created: {len(chunks)}")
-
-        # Step 3: Embed in batches
-        embeddings_with_metadata = []
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
-            texts = [chunk["text"] for chunk in batch]
-            print(f"Embedding batch {i//batch_size+1} of size {len(texts)}")
-            batch_embeddings = embed_text(texts)
-
-            for chunk, embedding in zip(batch, batch_embeddings):
-                embeddings_with_metadata.append({
-                    "chunk_id": chunk["chunk_id"],
-                    "filename": chunk.get("filename"),
-                    "source": chunk.get("source"),
-                    "url": chunk.get("url"),
-                    "text": chunk["text"],
-                    "embedding": embedding["embedding"],
-                })
-
-        # ✅ Step 4: Store to Pinecone
-        store_embeddings(embeddings_with_metadata)
-
-        return {
-            "num_chunks": len(embeddings_with_metadata),
-            "first_vector": embeddings_with_metadata[0]
-        }
-
-    except Exception as e:
-        return {"error": str(e)} 

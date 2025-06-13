@@ -14,5 +14,4 @@ PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 email-validator==2.0.0
 # Database dependencies
-asyncpg==0.29.0
-psycopg2-binary==2.9.9 
+asyncpg==0.29.0 
