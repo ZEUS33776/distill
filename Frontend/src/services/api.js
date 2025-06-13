@@ -172,6 +172,166 @@ class ApiService {
       return false;
     }
   }
+
+  // Session management
+  async createSession(userId, topic = 'New chat') {
+    console.log('📝 Creating new session for user:', userId, 'with topic:', topic);
+    try {
+      const result = await this.request('/create_session', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: userId,
+          topic: topic
+        })
+      });
+      console.log('✅ Session created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Session creation failed:', error);
+      throw error;
+    }
+  }
+
+  async updateSessionTopic(sessionId, topic) {
+    console.log('📝 Updating session topic:', { sessionId, topic });
+    try {
+      const result = await this.request('/update_session_topic', {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: sessionId,
+          topic: topic
+        })
+      });
+      console.log('✅ Session topic updated successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Session topic update failed:', error);
+      throw error;
+    }
+  }
+
+  async processPDF(file, userId, sessionId) {
+    console.log('📄 Processing PDF:', file.name);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', userId);
+      formData.append('session_id', sessionId);
+
+      const response = await fetch(`${this.baseURL}/process_pdf/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${this.getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process PDF');
+      }
+
+      const data = await response.json();
+      console.log('✅ PDF processed successfully:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error processing PDF:', error);
+      throw error;
+    }
+  }
+
+  async processYouTubeVideo(url, userId, sessionId) {
+    console.log('🎥 Processing YouTube video:', url);
+    try {
+      const response = await fetch(`${this.baseURL}/process_youtube_video/?url=${encodeURIComponent(url)}&user_id=${userId}&session_id=${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.getToken()}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process YouTube video');
+      }
+
+      const data = await response.json();
+      console.log('✅ YouTube video processed successfully:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error processing YouTube video:', error);
+      throw error;
+    }
+  }
+
+  async processContentToEmbeddings(userId, sessionId) {
+    try {
+      const requestBody = {
+        user_id: userId,
+        session_id: sessionId,
+        chunk_size: 500,
+        batch_size: 64
+      }
+      
+      console.log('Processing content to embeddings with request:', requestBody)
+      
+      const response = await fetch(`${this.baseURL}/content_to_embeddings/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Backend error response:', errorData)
+        throw new Error(errorData.detail?.[0]?.msg || 'Failed to process content to embeddings')
+      }
+
+      const data = await response.json()
+      console.log('Content processed to embeddings:', data)
+      return data
+    } catch (error) {
+      console.error('❌ Error processing content to embeddings:', error)
+      throw error
+    }
+  }
+
+  async queryLLM(userId, sessionId, query) {
+    try {
+      console.log('Querying LLM with:', { userId, sessionId, query })
+      const response = await fetch(`${this.baseURL}/query-llm/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getToken()}`
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          session_id: sessionId,
+          query: query
+        }),
+      })
+
+      const responseData = await response.json()
+      console.log('Raw response from backend:', responseData)
+
+      if (!response.ok) {
+        console.error('Backend error response:', responseData)
+        const errorMessage = responseData.detail?.message || 
+                           responseData.detail?.error || 
+                           responseData.error || 
+                           'Failed to get response from LLM'
+        throw new Error(errorMessage)
+      }
+
+      // Return the response data directly without trying to parse nested JSON
+      // The body will be handled properly in the frontend
+      return responseData
+    } catch (error) {
+      console.error('Error in queryLLM:', error)
+      throw error
+    }
+  }
 }
 
 export default new ApiService(); 

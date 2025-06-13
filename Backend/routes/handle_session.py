@@ -8,6 +8,7 @@ router = APIRouter()
 
 class CreateSessionRequest(BaseModel):
     user_id: str
+    topic: str = "New chat"  # Default value if not provided
 
 class UpdateSessionTopicRequest(BaseModel):
     session_id: str
@@ -25,7 +26,7 @@ async def create_session(request: CreateSessionRequest):
         async with db.get_connection() as conn:
             await conn.execute(
                 "INSERT INTO sessions (session_id, user_id, created_at, topic, is_active) VALUES ($1, $2, $3, $4, $5)",
-                session_id, request.user_id, datetime.now(), "New chat", True
+                session_id, request.user_id, datetime.now(), request.topic, True
             )
         
         return {"session_id": session_id, "success": True}

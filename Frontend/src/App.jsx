@@ -140,7 +140,7 @@ const AppContent = () => {
 // Main App component with providers
 function App() {
   console.log('🏛️ App: Starting application');
-  
+
   return (
     <AppProvider>
       <Toaster 

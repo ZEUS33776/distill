@@ -89,6 +89,7 @@ const Header = () => {
         <button
           onClick={toggleSidebar}
           className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          aria-label="Toggle sidebar"
         >
           <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
         </button>
@@ -100,39 +101,8 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Center Section - Search */}
-      <div className="flex-1 max-w-xl mx-8 hidden md:block">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search conversations, quizzes, or ask AI..."
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-          />
-        </div>
-      </div>
-
       {/* Right Section */}
       <div className="flex items-center space-x-2">
-        {/* Upload Actions */}
-        <div className="hidden sm:flex items-center space-x-2">
-          <button
-            onClick={handleUploadFile}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            <span className="hidden lg:inline">Upload PDF</span>
-          </button>
-          
-          <button
-            onClick={handleYouTubeUpload}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
-          >
-            <Youtube className="w-4 h-4" />
-            <span className="hidden lg:inline">YouTube</span>
-          </button>
-        </div>
-
         {/* Theme Toggle */}
         <ThemeToggle className="mx-2" />
 
@@ -141,6 +111,7 @@ const Header = () => {
           <button
             onClick={() => setNotificationMenuOpen(!notificationMenuOpen)}
             className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="View notifications"
           >
             <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
             {notifications.length > 0 && (
@@ -195,6 +166,7 @@ const Header = () => {
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="User menu"
           >
             <Avatar
               user={user}

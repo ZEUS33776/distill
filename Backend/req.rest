@@ -69,7 +69,7 @@ POST http://localhost:8000/query-llm-async
 Content-Type: application/json
 
 {
-    "query": "Tell me about educational psychology and tell me if the context given to you was relevant to the query",
+    "query": "Tell me more about educational psychology and tell me if the context given to you was relevant to the query",
     "user_id":"02d55edc-75c9-41bb-83f9-35907a0c4fa6",
     "session_id": "13c58cca-a663-4fc9-8c95-155a0ad791ff"
 }

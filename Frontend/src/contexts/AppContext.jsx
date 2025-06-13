@@ -187,8 +187,8 @@ export const AppProvider = ({ children }) => {
         // Update state
         console.log('📝 AppContext: Updating user state...');
         dispatch({ type: ACTION_TYPES.SET_USER, payload: response.user })
-        dispatch({ type: ACTION_TYPES.SET_AUTHENTICATED, payload: true })
-        localStorage.setItem('isAuthenticated', 'true')
+      dispatch({ type: ACTION_TYPES.SET_AUTHENTICATED, payload: true })
+      localStorage.setItem('isAuthenticated', 'true')
         localStorage.setItem('userData', JSON.stringify(response.user))
         
         console.log('🎉 AppContext: Signup completed successfully');
@@ -211,14 +211,14 @@ export const AppProvider = ({ children }) => {
         console.error('Logout error:', error)
       } finally {
         // Clear local state regardless of API call result
-        dispatch({ type: ACTION_TYPES.LOGOUT })
+      dispatch({ type: ACTION_TYPES.LOGOUT })
         apiService.removeToken()
-        localStorage.removeItem('isAuthenticated')
-        localStorage.removeItem('userData')
-        localStorage.removeItem('chatSessions')
-        localStorage.removeItem('currentSession')
-        localStorage.removeItem('activeTab')
-        toast.success('Successfully signed out!')
+      localStorage.removeItem('isAuthenticated')
+      localStorage.removeItem('userData')
+      localStorage.removeItem('chatSessions')
+      localStorage.removeItem('currentSession')
+      localStorage.removeItem('activeTab')
+      toast.success('Successfully signed out!')
       }
     },
 
@@ -266,42 +266,74 @@ export const AppProvider = ({ children }) => {
       }
     },
     
-    createSession: (title = 'New Chat') => {
-      const newSession = {
-        id: Date.now().toString(),
-        title,
-        messages: [],
-        messageCount: 0,
-        createdAt: new Date().toISOString(),
-        lastActivity: new Date().toISOString(),
-        type: 'chat'
+    createSession: async (title = 'New Chat') => {
+      try {
+        if (!state.user?.user_id) {
+          throw new Error('User must be authenticated to create a session');
+        }
+
+        dispatch({ type: ACTION_TYPES.SET_LOADING, payload: true });
+        
+        // Create session in backend with the provided title as topic
+        const response = await apiService.createSession(state.user.user_id, title);
+        
+        const newSession = {
+          id: response.session_id,
+          title,
+          messages: [],
+          messageCount: 0,
+          createdAt: new Date().toISOString(),
+          lastActivity: new Date().toISOString(),
+          type: 'chat'
+        };
+        
+        dispatch({ type: ACTION_TYPES.ADD_SESSION, payload: newSession });
+        
+        // Save to localStorage
+        const updatedSessions = [newSession, ...state.sessions];
+        localStorage.setItem('chatSessions', JSON.stringify(updatedSessions));
+        localStorage.setItem('currentSession', JSON.stringify(newSession));
+        
+        return newSession;
+      } catch (error) {
+        console.error('Failed to create session:', error);
+        dispatch({ type: ACTION_TYPES.SET_ERROR, payload: error.message });
+        toast.error('Failed to create new chat session');
+        throw error;
+      } finally {
+        dispatch({ type: ACTION_TYPES.SET_LOADING, payload: false });
       }
-      
-      dispatch({ type: ACTION_TYPES.ADD_SESSION, payload: newSession })
-      
-      // Save to localStorage
-      const updatedSessions = [newSession, ...state.sessions]
-      localStorage.setItem('chatSessions', JSON.stringify(updatedSessions))
-      localStorage.setItem('currentSession', JSON.stringify(newSession))
-      
-      return newSession
     },
     
-    updateSession: (sessionId, updatedData) => {
+    updateSession: async (sessionId, updatedData) => {
       const session = state.sessions.find(s => s.id === sessionId)
       if (!session) return
 
-      const updatedSession = { ...session, ...updatedData }
-      dispatch({ type: ACTION_TYPES.UPDATE_SESSION, payload: updatedSession })
-      
-      // Save to localStorage
-      const updatedSessions = state.sessions.map(s => 
-        s.id === sessionId ? updatedSession : s
-      )
-      localStorage.setItem('chatSessions', JSON.stringify(updatedSessions))
-      
-      if (state.currentSession?.id === sessionId) {
-        localStorage.setItem('currentSession', JSON.stringify(updatedSession))
+      try {
+        // If title is being updated, call the backend API
+        if (updatedData.title) {
+          await apiService.updateSessionTopic(sessionId, updatedData.title)
+        }
+
+        const updatedSession = { ...session, ...updatedData }
+        dispatch({ type: ACTION_TYPES.UPDATE_SESSION, payload: updatedSession })
+        
+        // Save to localStorage
+        const updatedSessions = state.sessions.map(s => 
+          s.id === sessionId ? updatedSession : s
+        )
+        localStorage.setItem('chatSessions', JSON.stringify(updatedSessions))
+        
+        if (state.currentSession?.id === sessionId) {
+          localStorage.setItem('currentSession', JSON.stringify(updatedSession))
+        }
+
+        return updatedSession
+      } catch (error) {
+        console.error('Failed to update session:', error)
+        dispatch({ type: ACTION_TYPES.SET_ERROR, payload: error.message })
+        toast.error('Failed to update session')
+        throw error
       }
     },
     

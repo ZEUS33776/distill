@@ -6,6 +6,8 @@ from Database.connection import db
 from datetime import datetime
 import uuid
 from Processing.embed import embed_query
+import json
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -21,11 +23,21 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
         query_vector = embed_query(query)
         print(f"✅ Query embedded successfully")
         
-        # Store user message with proper async
-        await store_message_async(query, "user", session_id, user_id, index_name)
+        # Start user message storage in background and get context in parallel
+        user_storage_task = asyncio.create_task(
+            store_message_async(query, "user", session_id, user_id, index_name)
+        )
+        print(f"🚀 User message storage started in background")
         
-        # Get all types of context
+        # Get all types of context (can happen in parallel with user storage)
         recent_messages, relevant_messages, relevant_embeddings = await getContext(query_vector, user_id, session_id, index_name)
+        
+        # Optionally wait for user storage to complete (but this is fast so it shouldn't block much)
+        try:
+            await user_storage_task
+            print(f"✅ User message storage completed")
+        except Exception as e:
+            print(f"⚠️ User message storage failed (continuing anyway): {e}")
         
         # Build comprehensive context
         context_parts = []
@@ -47,12 +59,36 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful educational assistant. If the user provides a specific topic, use that topic to generate your response. Otherwise, infer the topic from the ongoing context. First, analyze the conversation history to determine if the user might benefit from a quiz or flashnotes. If you determine they would benefit from either, ask them if they would like a quiz or flashnotes (whichever you think is more appropriate). If the user's last message was an affirmative response to your quiz/flashnotes suggestion, then: For quiz, return a JSON object with 'type' set to 'quiz' and 'body' containing 10 relevant multiple-choice questions with options and explanation (with the format {question: 'question', options: ['option1', 'option2', 'option3', 'option4'], answer: 'answer','explanation': 'explanation'}). For flashnotes, return a JSON object with 'type' set to 'flashnotes' and 'body' containing a 'notes' array of 20-30 concise and essential flash notes (with format {note: 'note'}). Otherwise, if the user is learning or asking for an explanation, respond with a JSON object where 'type' is 'response' and 'body' contains the LLM-generated explanation or answer. Always return only the raw JSON object without any additional commentary or formatting."
+                "content": """You are a helpful educational assistant. When responding:
+
+1. **For quiz requests**: Respond ONLY with:
+   `{"type": "quiz", "body": [{"question": "...", "options": ["a", "b", "c", "d"], "answer": "...", "explanation": "..."}, ...]}`
+
+2. **For flashcard requests**: Respond ONLY with:
+   `{"type": "flashnotes", "body": {"flashcards": [{"front": "Question or concept to test", "back": "Answer or explanation"}, ...]}}`
+
+3. **For general questions**: Provide explanation in:
+   `{"type": "response", "body": "..."}`
+
+**Flashcard Guidelines:**
+- front: Clear question, definition prompt, or concept to test
+- back: Complete answer, definition, or explanation
+- Create 8-12 flashcards covering key concepts
+- Focus on testable knowledge and understanding
+- Use question format: "What is...?", "How does...?", "Define...", etc.
+
+**Examples:**
+- front: "What is polymorphism in OOP?"
+- back: "Polymorphism allows objects of different types to be treated as instances of the same type through a common interface."
+
+Always respond with only the raw JSON object, no extra text.
+
+User Query: {query}\n\nContext: {context}"""
             },
             {
                 "role": "user", 
                 "content": f"User Query: {query}\n\nContext: {context}"
-            },
+            }
         ]
 
         # Call Groq API
@@ -69,15 +105,43 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
         assistant_response = chat_completion.choices[0].message.content
         print(f"✅ LLM response received: {len(assistant_response)} characters")
         
-        # Store assistant message with proper async
-        await store_message_async(assistant_response, "assistant", session_id, user_id, index_name)
-        
         print(assistant_response)
-        return str(assistant_response)
+        
+        # Parse and prepare the response first
+        response_to_return = None
+        try:
+            parsed_response = json.loads(assistant_response)
+            # If it's already a properly formatted response, return it directly
+            if isinstance(parsed_response, dict) and "type" in parsed_response and "body" in parsed_response:
+                response_to_return = parsed_response
+            else:
+                # Otherwise wrap it in a response object
+                response_to_return = {
+                    "type": "response",
+                    "body": str(parsed_response)
+                }
+        except json.JSONDecodeError:
+            # If it's not valid JSON, wrap the raw response
+            response_to_return = {
+                "type": "response",
+                "body": assistant_response
+            }
+        
+        # Store assistant message in background (don't wait for it)
+        asyncio.create_task(
+            store_message_async(assistant_response, "assistant", session_id, user_id, index_name)
+        )
+        print(f"🚀 Assistant message storage started in background")
+        
+        # Return response immediately
+        return response_to_return
 
     except Exception as e:
         print(f"❌ Error in query_llm: {e}")
-        return f"I apologize, but I encountered an error processing your request: {str(e)}"
+        return {
+            "type": "error",
+            "body": f"I apologize, but I encountered an error processing your request: {str(e)}"
+        }
 
 async def getContext(query_vector, user_id, session_id, index_name="chatbot-index"):
     try:
@@ -177,11 +241,26 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         return "", "", ""
 
 async def store_message_async(query, user_type, session_id, user_id, index_name="chatbot-index"):
-    """Proper async message storage"""
+    """Proper async message storage - optimized for background execution"""
+    start_time = datetime.now()
     try:
-        print(f"💾 Storing {user_type} message (async)")
+        print(f"💾 Storing {user_type} message (async) - session: {session_id}")
         
-        # Store in Pinecone (sync operation)
+        # Store in PostgreSQL database first (usually faster)
+        db_success = False
+        try:
+            async with db.get_connection() as conn:
+                await conn.execute(
+                    "INSERT INTO messages (session_id, role, content, timestamp) VALUES ($1, $2, $3, $4)",
+                    session_id, user_type, query, datetime.now()
+                )
+            db_success = True
+            print(f"✅ Database storage successful ({user_type})")
+        except Exception as db_error:
+            print(f"⚠️ Database storage failed ({user_type}): {db_error}")
+
+        # Store in Pinecone (sync operation) - can be slower
+        pinecone_success = False
         try:
             index = pc.Index(index_name)
             index.upsert(
@@ -201,23 +280,20 @@ async def store_message_async(query, user_type, session_id, user_id, index_name=
                 ],
                 namespace=user_id
             )
-            print(f"✅ Pinecone storage successful")
+            pinecone_success = True
+            print(f"✅ Pinecone storage successful ({user_type})")
         except Exception as pinecone_error:
-            print(f"⚠️ Pinecone storage failed: {pinecone_error}")
-
-        # Store in PostgreSQL database (proper async)
-        try:
-            async with db.get_connection() as conn:
-                await conn.execute(
-                    "INSERT INTO messages (session_id, role, content, timestamp) VALUES ($1, $2, $3, $4)",
-                    session_id, user_type, query, datetime.now()
-                )
-            print(f"✅ Database storage successful")
-        except Exception as db_error:
-            print(f"⚠️ Database storage failed: {db_error}")
+            print(f"⚠️ Pinecone storage failed ({user_type}): {pinecone_error}")
+        
+        # Log storage completion time
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        print(f"⏱️ Storage completed in {duration:.2f}s ({user_type}) - DB: {'✅' if db_success else '❌'}, Pinecone: {'✅' if pinecone_success else '❌'}")
 
     except Exception as e:
-        print(f"❌ Error in store_message_async: {e}")
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        print(f"❌ Error in store_message_async after {duration:.2f}s ({user_type}): {e}")
 
 # Backward compatibility aliases
 query_llm_with_async_db = query_llm

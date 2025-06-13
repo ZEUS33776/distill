@@ -25,6 +25,7 @@ async def content_to_embeddings(request: ContentToEmbeddingsRequest):
     /process_youtube_video/ or /process_pdf/ routes.
     """
     try:
+        print("recieved req",request)
         # Step 1: Chunk all files in parsed_files
         chunks = read_and_chunk_files(folder_path="./parsed_files", chunk_size=request.chunk_size)
         print(f"Chunks created: {len(chunks)}")

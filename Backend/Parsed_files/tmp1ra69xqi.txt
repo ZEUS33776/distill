@@ -1,0 +1,108 @@
+### SOURCE: pdf
+### FILENAME: tmp1ra69xqi
+### ORIGINAL_PATH: C:\Users\arjun\AppData\Local\Temp\tmp1ra69xqi.pdf
+
+### USER_ID: 02d55edc-75c9-41bb-83f9-35907a0c4fa6
+
+Arjun Deshmukh
+� desh.arjun3@gmail.com
+� github.com/ZEUS33776
+� portfolio-6rj9.onrender.com
+� leetcode.com/u/ZEUS 7
+Education
+Indian Institute of Information Technology, Kottayam
+Nov 2022 – March 2026
+Bachelor of Technology in Computer Science and Engineering
+CGPA: 9.06/10
+Experience
+Xcdify Solutions Private Limited
+Dec 2024 – Present
+Software Engineering Intern (remote)
+Bengaluru, Karnataka
+• Engineered an enterprise-grade Vehicle Routing Problem (VRP) solution that optimized logistics for 50+ vehicles,
+reducing transportation costs by 20% and improving operational efficiency by 35%.
+• Developed and deployed a dbt (Data Build Tool)-powered analytics platform with 10+ modular data
+transformation pipelines that enhanced processing speed by 40% and enabled real-time operational insights for key
+stakeholders.
+• Implemented scalable data engineering solutions including 50+ SQL transformations, automating workflows that
+reduced manual reporting overhead by 60% while meeting weekly sprint deadlines.
+• Presented technical outcomes to 10+ cross-functional stakeholders, successfully adapting to changing requirements
+across 5 agile sprints while fostering a data-driven decision-making culture.
+Projects
+VCS-Core – Distributed Version Control System | Python, PyPI, CLI, File Hashing, Git ProtocolGithub | PyPI
+• Architected and published a lightweight distributed version control system as an open-source Python package, achieving
+100% compatibility with core Git operations and demonstrating deep understanding of version control internals.
+• Implemented advanced file tracking algorithms using SHA-256 hashing, delta compression, and tree data structures for
+efficient directory traversal, reducing storage overhead by 40% while maintaining 99.9% data integrity across all
+repository operations.
+• Developed a comprehensive command-line interface supporting branching, merging, and conflict resolution with 15+
+Git-compatible commands, enabling seamless developer workflow integration.
+• Published to PyPI with complete documentation and unit tests, demonstrating software engineering best practices and
+enabling easy installation for 1000+ potential users worldwide.
+Lyfline – AI-Powered Heart Attack Prediction | Python, ML, React, Node.js, Django
+Github | Live Demo
+• Developed a comprehensive heart condition prediction system combining 3 machine learning models that achieved
+87% accuracy for new patient risk assessment and 97% accuracy for monitoring admitted patients.
+• Built an end-to-end patient monitoring platform with real-time alert capabilities that reduced detection time by 25%,
+enabling healthcare professionals to intervene promptly for high-risk patients.
+• Engineered a secure hospital database integration system with PostgreSQL, implementing role-based access control that
+processed 1000+ patient records while ensuring HIPAA-compliant data protection.
+• Integrated an intuitive web-based dashboard using React that visualizes patient risk levels and historical trends, allowing
+healthcare professionals to make informed decisions 40% faster.
+Institute Placement Portal | React, Node.js, Express, MongoDB
+Github
+• Led the development of an institutional placement portal with modern React architecture that improved student
+application process efficiency by 65% and increased company participation by 40%.
+• Implemented comprehensive JWT authentication system with robust security protocols that successfully processed 500+
+student registrations and protected sensitive recruitment data.
+• Designed and developed a sophisticated role-based access control system with differentiated permissions for coordinators,
+students, and administrators, streamlining the placement workflow by 50%.
+Excel and PDF Natural Language Query System | RAG, Mistral LLM, Ollama, Python, LangChain
+Github
+• Developed an interactive system enabling users to query Excel sheets and PDFs using natural language through a
+Retrieval-Augmented Generation (RAG) approach with locally running Ollama and Mistral LLM.
+• Engineered an intelligent pipeline that automatically generates and executes Python code for data extraction, supporting
+100+ query types including statistical analysis and semantic search.
+• Implemented context-aware processing by feeding extracted data back to the model, enabling accurate responses with
+high adaptability across diverse document formats.
+
+Research
+Advanced Analysis of the Maximum Subarray Problem (2D)
+Oct 2023 – Nov 2023
+Github
+• Conducted rigorous analysis of the 2D maximum subarray problem, exploring optimization strategies beyond the current
+O(n3 − ε) time complexity and achieving a 15% runtime improvement in specific cases.
+• Investigated the theoretical limits of algorithmic efficiency through mathematical proofs, producing a technical report
+presenting findings and optimization techniques.
+• Presented research to faculty and peers, effectively communicating complex algorithms and contributing to academic
+discourse on multidimensional array optimization.
+Skills
+• Programming Languages: Python, Java, C, C++, JavaScript, TypeScript, SQL, Bash
+• Scripting & Tools: Shell Scripting, DBT, Redis Queue, Git, GitHub, Docker, CI/CD
+• Software Development: React.js, Node.js, Express.js, Flask, FastAPI, REST APIs, HTML5, CSS3, Bootstrap,
+Tailwind CSS
+• Systems & Architecture: Operating Systems, Computer Architecture, Instruction Set Architecture, CPU Pipelines,
+Cache Subsystems, System Design
+• Databases & Cloud: PostgreSQL, MySQL, MongoDB, Redis, AWS (S3, EC2, Lambda), GCP, Firebase, Supabase
+• AI & Machine Learning: Scikit-Learn, TensorFlow, Pandas, NumPy, LangChain, RAG, Prompt Engineering,
+OLLAMA, Mistral, LLMs, Semantic Search, Deep Learning, NLP
+• Other Skills: Algorithm Optimization, Competitive Programming, Data Engineering, Problem Solving
+Relevant Coursework
+– Compiler Design
+– Database Management
+– Cloud Computing
+– Design and Analysis of
+Algorithms
+– Artificial Intelligence
+– Computer Architecture
+– Software Design Patterns
+– Data Warehousing and
+Mining
+– Operating System
+– Distributed Computing
+Achievements
+• Achieved a 1752 rating on LeetCode, demonstrating strong problem-solving abilities and placing among top
+competitive programmers on the platform.
+• Solved 300+ problems on LeetCode and over 500+ problems across platforms including Codeforces and GeeksforGeeks,
+demonstrating strong algorithmic skills.
+• Placed in the top 3% among 28,000 participants in LeetCode Contest 151.

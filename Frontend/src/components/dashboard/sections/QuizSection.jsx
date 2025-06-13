@@ -11,234 +11,146 @@ import {
   Play,
   ChevronRight,
   Award,
-  Target
+  Target,
+  Sparkles,
+  X
 } from 'lucide-react'
-
-// Sample quiz data - can be replaced with API data later
-const sampleQuizzes = [
-  {
-    id: 1,
-    title: "React Fundamentals",
-    description: "Test your knowledge of React basics, components, and hooks",
-    difficulty: "Beginner",
-    estimatedTime: "10 min",
-    questions: [
-      {
-        id: 1,
-        question: "What is the correct way to create a functional component in React?",
-        options: [
-          "function MyComponent() { return <div>Hello</div>; }",
-          "const MyComponent = () => { return <div>Hello</div>; }",
-          "class MyComponent extends Component { render() { return <div>Hello</div>; } }",
-          "Both A and B are correct"
-        ],
-        correctAnswer: 3,
-        explanation: "Both function declarations and arrow functions are valid ways to create functional components in React."
-      },
-      {
-        id: 2,
-        question: "Which hook is used to manage state in functional components?",
-        options: [
-          "useEffect",
-          "useState",
-          "useContext",
-          "useReducer"
-        ],
-        correctAnswer: 1,
-        explanation: "useState is the primary hook for managing local state in functional components."
-      },
-      {
-        id: 3,
-        question: "What does the useEffect hook do?",
-        options: [
-          "Creates state variables",
-          "Handles side effects and lifecycle events",
-          "Manages component context",
-          "Optimizes component performance"
-        ],
-        correctAnswer: 1,
-        explanation: "useEffect handles side effects like API calls, subscriptions, and lifecycle events in functional components."
-      },
-      {
-        id: 4,
-        question: "What is JSX?",
-        options: [
-          "A new programming language",
-          "A syntax extension for JavaScript",
-          "A CSS framework",
-          "A testing library"
-        ],
-        correctAnswer: 1,
-        explanation: "JSX is a syntax extension for JavaScript that allows you to write HTML-like code in your JavaScript files."
-      },
-      {
-        id: 5,
-        question: "Which of the following is true about React keys?",
-        options: [
-          "They are optional for list items",
-          "They should be unique among siblings",
-          "They can be any random number",
-          "They are only needed for forms"
-        ],
-        correctAnswer: 1,
-        explanation: "React keys should be unique among siblings to help React identify which items have changed, added, or removed."
-      }
-    ]
-  },
-  {
-    id: 2,
-    title: "JavaScript ES6+",
-    description: "Modern JavaScript features and syntax",
-    difficulty: "Intermediate",
-    estimatedTime: "15 min",
-    questions: [
-      {
-        id: 1,
-        question: "What does the spread operator (...) do?",
-        options: [
-          "Creates a new array",
-          "Expands iterables into individual elements",
-          "Merges objects",
-          "All of the above"
-        ],
-        correctAnswer: 3,
-        explanation: "The spread operator can expand arrays, merge objects, and create copies of iterables."
-      },
-      {
-        id: 2,
-        question: "What is destructuring in JavaScript?",
-        options: [
-          "Breaking down large functions",
-          "Extracting values from arrays or objects",
-          "Removing properties from objects",
-          "Optimizing code performance"
-        ],
-        correctAnswer: 1,
-        explanation: "Destructuring allows you to extract values from arrays or properties from objects into distinct variables."
-      },
-      {
-        id: 3,
-        question: "What is the difference between let and const?",
-        options: [
-          "let is block-scoped, const is function-scoped",
-          "const creates immutable values, let creates mutable values",
-          "const cannot be reassigned, let can be reassigned",
-          "There is no difference"
-        ],
-        correctAnswer: 2,
-        explanation: "const variables cannot be reassigned after declaration, while let variables can be reassigned within their scope."
-      }
-    ]
-  },
-  {
-    id: 3,
-    title: "CSS Fundamentals",
-    description: "Styling, layouts, and responsive design concepts",
-    difficulty: "Beginner",
-    estimatedTime: "8 min",
-    questions: [
-      {
-        id: 1,
-        question: "Which CSS property is used to control the spacing between elements?",
-        options: [
-          "padding",
-          "margin",
-          "border",
-          "spacing"
-        ],
-        correctAnswer: 1,
-        explanation: "Margin controls the space outside an element's border, creating spacing between elements."
-      },
-      {
-        id: 2,
-        question: "What does 'box-sizing: border-box' do?",
-        options: [
-          "Adds a border to the element",
-          "Includes padding and border in the element's total width and height",
-          "Creates a box shadow",
-          "Changes the element's display type"
-        ],
-        correctAnswer: 1,
-        explanation: "border-box includes padding and border in the element's width and height calculations."
-      }
-    ]
-  }
-]
 
 const QuizSection = () => {
   const [selectedQuiz, setSelectedQuiz] = useState(null)
+  const [quizState, setQuizState] = useState('home') // 'home', 'quiz', 'results'
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [selectedAnswers, setSelectedAnswers] = useState({})
-  const [showResults, setShowResults] = useState(false)
-  const [quizStarted, setQuizStarted] = useState(false)
-  const [timeRemaining, setTimeRemaining] = useState(0)
-  const [quizCompleted, setQuizCompleted] = useState(false)
+  const [userAnswers, setUserAnswers] = useState({})
+  const [timeStarted, setTimeStarted] = useState(null)
+  const [timeFinished, setTimeFinished] = useState(null)
+  const [timeRemaining, setTimeRemaining] = useState(600) // 10 minutes default
+  const [aiQuizData, setAiQuizData] = useState(null) // For AI-generated quiz data
+  const [showAiBanner, setShowAiBanner] = useState(false)
 
-  // Timer effect
+  // Check for pending quiz data from chat
   useEffect(() => {
-    if (quizStarted && timeRemaining > 0 && !quizCompleted) {
-      const timer = setTimeout(() => {
-        setTimeRemaining(timeRemaining - 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    } else if (timeRemaining === 0 && quizStarted) {
-      handleQuizComplete()
+    const pendingQuizData = localStorage.getItem('pendingQuizData')
+    if (pendingQuizData) {
+      try {
+        const parsedQuizData = JSON.parse(pendingQuizData)
+        console.log('🧠 Found pending quiz data:', parsedQuizData)
+        
+        // Transform AI quiz data to match our quiz format
+        const transformedQuiz = {
+          id: 'ai-generated',
+          title: "AI Generated Quiz",
+          description: "Quiz generated from your conversation with the AI assistant",
+          difficulty: "Mixed",
+          estimatedTime: `${Math.ceil(parsedQuizData.length * 1.5)} min`,
+          questions: parsedQuizData.map((q, index) => ({
+            id: index + 1,
+            question: q.question,
+            options: q.options || [],
+            correctAnswer: typeof q.answer === 'string' ? 
+              (q.options || []).findIndex(opt => opt.toLowerCase().includes(q.answer.toLowerCase())) :
+              q.answer,
+            explanation: q.explanation || "No explanation provided."
+          }))
+        }
+        
+        setAiQuizData(transformedQuiz)
+        setShowAiBanner(true)
+        
+        console.log('✅ AI quiz data ready:', transformedQuiz)
+      } catch (error) {
+        console.error('❌ Error parsing pending quiz data:', error)
+        localStorage.removeItem('pendingQuizData')
+      }
     }
-  }, [timeRemaining, quizStarted, quizCompleted])
+  }, [])
 
-  const startQuiz = (quiz) => {
-    setSelectedQuiz(quiz)
-    setCurrentQuestionIndex(0)
-    setSelectedAnswers({})
-    setShowResults(false)
-    setQuizStarted(true)
-    setQuizCompleted(false)
-    // Set timer based on estimated time (convert to seconds)
-    const minutes = parseInt(quiz.estimatedTime)
-    setTimeRemaining(minutes * 60)
+  // Timer effect for quiz
+  useEffect(() => {
+    let interval = null
+    if (quizState === 'quiz' && timeRemaining > 0) {
+      interval = setInterval(() => {
+        setTimeRemaining(time => {
+          if (time <= 1) {
+            // Time's up - auto-submit quiz
+            setTimeFinished(Date.now())
+            setQuizState('results')
+            return 0
+          }
+          return time - 1
+        })
+      }, 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [quizState, timeRemaining])
+
+  const startAiQuiz = () => {
+    if (aiQuizData) {
+      setSelectedQuiz(aiQuizData)
+      setQuizState('quiz')
+      setTimeStarted(Date.now())
+      setCurrentQuestionIndex(0)
+      setUserAnswers({})
+      setTimeRemaining(600) // Reset timer to 10 minutes
+      setShowAiBanner(false)
+      // Clear the pending data
+      localStorage.removeItem('pendingQuizData')
+    }
   }
 
-  const selectAnswer = (questionId, answerIndex) => {
-    setSelectedAnswers(prev => ({
+  const dismissAiBanner = () => {
+    setShowAiBanner(false)
+    setAiQuizData(null)
+    localStorage.removeItem('pendingQuizData')
+  }
+
+  const selectAnswer = (answerIndex) => {
+    setUserAnswers(prev => ({
       ...prev,
-      [questionId]: answerIndex
+      [currentQuestionIndex]: answerIndex
     }))
   }
 
   const nextQuestion = () => {
     if (currentQuestionIndex < selectedQuiz.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      setCurrentQuestionIndex(prev => prev + 1)
     } else {
-      handleQuizComplete()
+      // Quiz completed
+      setTimeFinished(Date.now())
+      setQuizState('results')
     }
   }
 
-  const handleQuizComplete = () => {
-    setQuizCompleted(true)
-    setShowResults(true)
-  }
-
   const resetQuiz = () => {
+    setQuizState('home')
     setSelectedQuiz(null)
     setCurrentQuestionIndex(0)
-    setSelectedAnswers({})
-    setShowResults(false)
-    setQuizStarted(false)
-    setQuizCompleted(false)
-    setTimeRemaining(0)
+    setUserAnswers({})
+    setTimeStarted(null)
+    setTimeFinished(null)
+    setTimeRemaining(600)
   }
 
   const calculateScore = () => {
-    if (!selectedQuiz) return { correct: 0, total: 0, percentage: 0 }
-    
-    const correct = selectedQuiz.questions.reduce((acc, question) => {
-      return selectedAnswers[question.id] === question.correctAnswer ? acc + 1 : acc
-    }, 0)
-    
-    const total = selectedQuiz.questions.length
-    const percentage = Math.round((correct / total) * 100)
-    
-    return { correct, total, percentage }
+    let correct = 0
+    selectedQuiz.questions.forEach((question, index) => {
+      if (userAnswers[index] === question.correctAnswer) {
+        correct++
+      }
+    })
+    return {
+      correct,
+      total: selectedQuiz.questions.length,
+      percentage: Math.round((correct / selectedQuiz.questions.length) * 100)
+    }
+  }
+
+  const getTimeTaken = () => {
+    if (timeStarted && timeFinished) {
+      return Math.round((timeFinished - timeStarted) / 1000)
+    }
+    return 0
   }
 
   const formatTime = (seconds) => {
@@ -247,232 +159,231 @@ const QuizSection = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty.toLowerCase()) {
-      case 'beginner': return 'text-green-600 bg-green-100'
-      case 'intermediate': return 'text-yellow-600 bg-yellow-100'
-      case 'advanced': return 'text-red-600 bg-red-100'
-      default: return 'text-gray-600 bg-gray-100'
-    }
-  }
-
-  // Quiz Selection Screen
-  if (!selectedQuiz) {
+  // Home screen - show AI banner or empty state
+  if (quizState === 'home') {
     return (
-      <div className="h-full bg-gradient-to-br from-green-50 to-emerald-50 overflow-y-auto">
-        <div className="p-6">
-          <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-center mb-8"
-            >
-              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <BookOpen className="h-8 w-8 text-white" />
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Smart Quizzes</h1>
-              <p className="text-gray-600">Test your knowledge with AI-generated quizzes</p>
-            </motion.div>
-
-            {/* Quiz Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {sampleQuizzes.map((quiz, index) => (
-                <motion.div
-                  key={quiz.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300 cursor-pointer"
-                  onClick={() => startQuiz(quiz)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                      <Brain className="h-6 w-6 text-white" />
+      <div className="h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-6xl mx-auto"
+        >
+          {/* AI Quiz Banner */}
+          <AnimatePresence>
+            {showAiBanner && aiQuizData && (
+              <motion.div
+                initial={{ opacity: 0, y: -50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -50, scale: 0.95 }}
+                className="mb-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-xl border border-green-400"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                      <Sparkles className="h-6 w-6 text-white" />
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyColor(quiz.difficulty)}`}>
-                      {quiz.difficulty}
-                    </span>
-                  </div>
-                  
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{quiz.title}</h3>
-                  <p className="text-gray-600 text-sm mb-4 leading-relaxed">{quiz.description}</p>
-                  
-                  <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      {quiz.estimatedTime}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Target className="h-4 w-4" />
-                      {quiz.questions.length} questions
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold mb-2 flex items-center">
+                        <Brain className="h-5 w-5 mr-2" />
+                        AI Generated Quiz Ready!
+                      </h3>
+                      <p className="text-green-100 mb-4">
+                        Your personalized quiz has been generated based on your conversation. 
+                        It contains {aiQuizData.questions.length} questions and should take about {aiQuizData.estimatedTime} to complete.
+                      </p>
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={startAiQuiz}
+                          className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition-colors flex items-center"
+                        >
+                          <Play className="h-5 w-5 mr-2" />
+                          Start AI Quiz
+                        </button>
+                        <div className="text-green-100 text-sm">
+                          {aiQuizData.questions.length} questions • {aiQuizData.difficulty} difficulty
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <button className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-2 px-4 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center justify-center gap-2">
-                    <Play className="h-4 w-4" />
-                    Start Quiz
+                  <button
+                    onClick={dismissAiBanner}
+                    className="text-green-200 hover:text-white transition-colors p-1"
+                  >
+                    <X className="h-5 w-5" />
                   </button>
-                </motion.div>
-              ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Empty State - Only show when no AI quiz */}
+          {!showAiBanner && (
+            <div className="text-center py-16">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2 }}
+                className="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
+              >
+                <Brain className="h-12 w-12 text-white" />
+              </motion.div>
+              
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                Smart Quizzes
+              </h1>
+              <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-8">
+                No quizzes available yet. Ask the AI assistant to generate a quiz for you based on any topic!
+              </p>
+
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-200 dark:border-gray-700 max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  How to get started:
+                </h3>
+                <div className="text-left space-y-3 text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">1</div>
+                    <span>Go to the Chat tab</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">2</div>
+                    <span>Ask about any topic you want to learn</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">3</div>
+                    <span>Request a quiz to test your knowledge</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </motion.div>
       </div>
     )
   }
 
-  // Results Screen
-  if (showResults) {
+  // Results screen
+  if (quizState === 'results') {
     const score = calculateScore()
-    const isPassingGrade = score.percentage >= 70
+    const timeTaken = getTimeTaken()
 
     return (
       <div className="h-full bg-gradient-to-br from-green-50 to-emerald-50 overflow-y-auto">
         <div className="p-6">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-4xl mx-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center mb-8"
+              className="bg-white rounded-2xl shadow-xl p-8 text-center"
             >
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg ${
-                isPassingGrade 
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
-                  : 'bg-gradient-to-r from-orange-500 to-red-500'
-              }`}>
-                {isPassingGrade ? (
-                  <Trophy className="h-10 w-10 text-white" />
-                ) : (
-                  <Target className="h-10 w-10 text-white" />
-                )}
-              </div>
-              
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                {isPassingGrade ? 'Congratulations!' : 'Keep Studying!'}
-              </h1>
-              <p className="text-gray-600">You've completed: {selectedQuiz.title}</p>
-            </motion.div>
-
-            {/* Score Display */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white rounded-xl shadow-lg p-8 mb-6"
-            >
-              <div className="text-center mb-6">
-                <div className={`text-6xl font-bold mb-2 ${
-                  isPassingGrade ? 'text-green-600' : 'text-orange-600'
-                }`}>
-                  {score.percentage}%
+              {/* Results Header */}
+              <div className="mb-8">
+                <div className="w-20 h-20 mx-auto mb-4">
+                  {score.percentage >= 80 ? (
+                    <div className="w-full h-full bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                      <Trophy className="h-10 w-10 text-white" />
+                    </div>
+                  ) : score.percentage >= 60 ? (
+                    <div className="w-full h-full bg-gradient-to-r from-yellow-500 to-orange-600 rounded-full flex items-center justify-center">
+                      <Award className="h-10 w-10 text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-r from-red-500 to-pink-600 rounded-full flex items-center justify-center">
+                      <Target className="h-10 w-10 text-white" />
+                    </div>
+                  )}
                 </div>
+                
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  Quiz Completed!
+                </h1>
                 <p className="text-gray-600">
-                  {score.correct} out of {score.total} questions correct
+                  {score.percentage >= 80 ? 'Excellent work!' : 
+                   score.percentage >= 60 ? 'Good job!' : 
+                   'Keep practicing!'}
                 </p>
               </div>
-              
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+
+              {/* Score Display */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6">
+                  <div className="text-3xl font-bold text-blue-600 mb-2">
+                    {score.correct}/{score.total}
                   </div>
-                  <div className="text-2xl font-bold text-green-600">{score.correct}</div>
-                  <div className="text-sm text-gray-600">Correct</div>
+                  <div className="text-gray-600">Questions Correct</div>
                 </div>
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <XCircle className="h-5 w-5 text-red-600" />
+                
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6">
+                  <div className="text-3xl font-bold text-green-600 mb-2">
+                    {score.percentage}%
                   </div>
-                  <div className="text-2xl font-bold text-red-600">{score.total - score.correct}</div>
-                  <div className="text-sm text-gray-600">Incorrect</div>
+                  <div className="text-gray-600">Accuracy</div>
                 </div>
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    <Award className="h-5 w-5 text-blue-600" />
+                
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
+                  <div className="text-3xl font-bold text-purple-600 mb-2">
+                    {formatTime(timeTaken)}
                   </div>
-                  <div className="text-2xl font-bold text-blue-600">{score.total}</div>
-                  <div className="text-sm text-gray-600">Total</div>
+                  <div className="text-gray-600">Time Taken</div>
                 </div>
               </div>
-            </motion.div>
 
-            {/* Question Review */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="space-y-4 mb-8"
-            >
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Question Review</h2>
-              {selectedQuiz.questions.map((question, index) => {
-                const userAnswer = selectedAnswers[question.id]
-                const isCorrect = userAnswer === question.correctAnswer
-                
-                return (
-                  <div key={question.id} className="bg-white rounded-lg shadow-md p-6">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold ${
-                        isCorrect ? 'bg-green-500' : 'bg-red-500'
+              {/* Question Review */}
+              <div className="text-left mb-8">
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Question Review</h3>
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {selectedQuiz.questions.map((question, index) => {
+                    const userAnswer = userAnswers[index]
+                    const isCorrect = userAnswer === question.correctAnswer
+                    
+                    return (
+                      <div key={question.id} className={`p-4 rounded-lg border-2 ${
+                        isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
                       }`}>
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 mb-3">{question.question}</p>
-                        <div className="space-y-2">
-                          {question.options.map((option, optionIndex) => (
-                            <div
-                              key={optionIndex}
-                              className={`p-3 rounded-lg border text-sm ${
-                                optionIndex === question.correctAnswer
-                                  ? 'border-green-500 bg-green-50 text-green-800'
-                                  : optionIndex === userAnswer && !isCorrect
-                                  ? 'border-red-500 bg-red-50 text-red-800'
-                                  : 'border-gray-200 bg-gray-50 text-gray-700'
-                              }`}
-                            >
-                              {option}
-                              {optionIndex === question.correctAnswer && (
-                                <CheckCircle className="h-4 w-4 text-green-600 inline ml-2" />
-                              )}
-                              {optionIndex === userAnswer && !isCorrect && (
-                                <XCircle className="h-4 w-4 text-red-600 inline ml-2" />
+                        <div className="flex items-start gap-3 mb-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            isCorrect ? 'bg-green-500' : 'bg-red-500'
+                          }`}>
+                            {isCorrect ? (
+                              <CheckCircle className="h-4 w-4 text-white" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 mb-2">
+                              Question {index + 1}: {question.question}
+                            </h4>
+                            <div className="text-sm text-gray-600">
+                              <div className="mb-1">
+                                <strong>Your answer:</strong> {question.options[userAnswer] || 'No answer'}
+                              </div>
+                              <div className="mb-1">
+                                <strong>Correct answer:</strong> {question.options[question.correctAnswer]}
+                              </div>
+                              {question.explanation && (
+                                <div className="mt-2 text-gray-700">
+                                  <strong>Explanation:</strong> {question.explanation}
+                                </div>
                               )}
                             </div>
-                          ))}
-                        </div>
-                        <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                          <p className="text-blue-800 text-sm">
-                            <strong>Explanation:</strong> {question.explanation}
-                          </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </motion.div>
+                    )
+                  })}
+                </div>
+              </div>
 
-            {/* Action Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              className="flex gap-4 justify-center"
-            >
-              <button
-                onClick={() => startQuiz(selectedQuiz)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Retake Quiz
-              </button>
-              <button
-                onClick={resetQuiz}
-                className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-200"
-              >
-                Back to Quizzes
-              </button>
+              {/* Action Buttons */}
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={resetQuiz}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Take Another Quiz
+                </button>
+              </div>
             </motion.div>
           </div>
         </div>
@@ -548,20 +459,20 @@ const QuizSection = () => {
                     key={index}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => selectAnswer(currentQuestion.id, index)}
+                    onClick={() => selectAnswer(index)}
                     className={`w-full p-4 text-left rounded-lg border-2 transition-all duration-200 ${
-                      selectedAnswers[currentQuestion.id] === index
+                      userAnswers[currentQuestionIndex] === index
                         ? 'border-green-500 bg-green-50 text-green-800'
                         : 'border-gray-200 bg-gray-50 hover:border-green-300 hover:bg-green-50 text-gray-700'
                     }`}
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        selectedAnswers[currentQuestion.id] === index
+                        userAnswers[currentQuestionIndex] === index
                           ? 'border-green-500 bg-green-500'
                           : 'border-gray-300'
                       }`}>
-                        {selectedAnswers[currentQuestion.id] === index && (
+                        {userAnswers[currentQuestionIndex] === index && (
                           <div className="w-2 h-2 bg-white rounded-full" />
                         )}
                       </div>
@@ -580,7 +491,7 @@ const QuizSection = () => {
             className="flex justify-between"
           >
             <div className="text-sm text-gray-500">
-              {selectedAnswers[currentQuestion.id] !== undefined ? (
+              {userAnswers[currentQuestionIndex] !== undefined ? (
                 <span className="text-green-600">✓ Answer selected</span>
               ) : (
                 <span>Select an answer to continue</span>
@@ -589,7 +500,7 @@ const QuizSection = () => {
             
             <button
               onClick={nextQuestion}
-              disabled={selectedAnswers[currentQuestion.id] === undefined}
+              disabled={userAnswers[currentQuestionIndex] === undefined}
               className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               {currentQuestionIndex === selectedQuiz.questions.length - 1 ? 'Finish Quiz' : 'Next Question'}
