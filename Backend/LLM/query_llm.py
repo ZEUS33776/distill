@@ -13,7 +13,7 @@ load_dotenv()
 
 # Try different pinecone import approaches for compatibility
 try:
-    # Try new API first
+    # Using NEW API (pinecone>=7.0.0)
     from pinecone import Pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
     
@@ -26,42 +26,23 @@ try:
     try:
         indexes = pc.list_indexes()
         print(f"🔗 Using NEW Pinecone API - Found {len(indexes)} indexes")
-        PINECONE_NEW_API = True
+        PINECONE_AVAILABLE = True
     except Exception as init_error:
         print(f"⚠️ NEW API initialization test failed: {init_error}")
         raise ImportError("New API failed initialization test")
         
 except (ImportError, ValueError) as e:
-    print(f"🔗 NEW API unavailable ({e}), trying pinecone-client...")
+    print(f"❌ Pinecone unavailable ({e}) - using database-only mode")
     
-    # Try pinecone-client package
-    try:
-        import pinecone
-        pinecone_api_key = os.getenv("PINECONE_API_KEY")
-        
-        if not pinecone_api_key:
-            print("❌ PINECONE_API_KEY not found")
-            raise ValueError("API key missing")
-        
-        # Initialize without specifying environment - auto-detect
-        pinecone.init(api_key=pinecone_api_key)
-        
-        # Test connection
-        indexes = pinecone.list_indexes()
-        print(f"🔗 Using pinecone-client API - Found {len(indexes)} indexes")
-        
-        pc = pinecone
-        PINECONE_NEW_API = False
-        
-    except Exception as fallback_error:
-        print(f"❌ All Pinecone APIs failed: {fallback_error}")
-        # Create a dummy object that will always fail gracefully
-        class DummyPinecone:
-            def Index(self, name):
-                raise Exception("Pinecone unavailable - using database-only mode")
-        
-        pc = DummyPinecone()
-        PINECONE_NEW_API = False
+    # Create a dummy object that will always fail gracefully
+    class DummyPinecone:
+        def Index(self, name):
+            raise Exception("Pinecone unavailable - using database-only mode")
+        def list_indexes(self):
+            return []
+    
+    pc = DummyPinecone()
+    PINECONE_AVAILABLE = False
 
 async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
     """Main async LLM query function with proper database storage"""
@@ -201,10 +182,7 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         
         # Try to get context from Pinecone (with error handling)
         try:
-            if PINECONE_NEW_API:
-                index = pc.Index(index_name)
-            else:
-                index = pc.Index(index_name)
+            index = pc.Index(index_name)
 
             # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
             embedding_results = index.query(
@@ -330,10 +308,7 @@ async def store_message_async(query, user_type, session_id, user_id, index_name=
         # Store in Pinecone (sync operation) - can be slower
         pinecone_success = False
         try:
-            if PINECONE_NEW_API:
-                index = pc.Index(index_name)
-            else:
-                index = pc.Index(index_name)
+            index = pc.Index(index_name)
             
             index.upsert(
                 vectors=[
