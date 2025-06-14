@@ -1,0 +1,13 @@
+{
+  "name": "distill",
+  "version": "1.0.0",
+  "scripts": {
+    "install-frontend": "cd Frontend && npm install",
+    "build-frontend": "cd Frontend && npm run build",
+    "preview-frontend": "cd Frontend && npm run preview",
+    "deploy-frontend": "npm run install-frontend && npm run build-frontend"
+  },
+  "workspaces": [
+    "Frontend"
+  ]
+} 
