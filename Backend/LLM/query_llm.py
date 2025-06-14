@@ -13,6 +13,7 @@ load_dotenv()
 
 # Try different pinecone import approaches for compatibility
 try:
+    # Try new API first
     from pinecone import Pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
     
@@ -31,15 +32,36 @@ try:
         raise ImportError("New API failed initialization test")
         
 except (ImportError, ValueError) as e:
-    print(f"🔗 NEW API unavailable ({e}), using OLD API fallback")
-    # Fallback to older API
-    import pinecone
-    pinecone_api_key = os.getenv("PINECONE_API_KEY")
-    # Don't specify environment - let Pinecone auto-detect the correct region
-    pinecone.init(api_key=pinecone_api_key)
-    pc = pinecone
-    PINECONE_NEW_API = False
-    print(f"🔗 Using OLD Pinecone API (fallback)")
+    print(f"🔗 NEW API unavailable ({e}), trying pinecone-client...")
+    
+    # Try pinecone-client package
+    try:
+        import pinecone
+        pinecone_api_key = os.getenv("PINECONE_API_KEY")
+        
+        if not pinecone_api_key:
+            print("❌ PINECONE_API_KEY not found")
+            raise ValueError("API key missing")
+        
+        # Initialize without specifying environment - auto-detect
+        pinecone.init(api_key=pinecone_api_key)
+        
+        # Test connection
+        indexes = pinecone.list_indexes()
+        print(f"🔗 Using pinecone-client API - Found {len(indexes)} indexes")
+        
+        pc = pinecone
+        PINECONE_NEW_API = False
+        
+    except Exception as fallback_error:
+        print(f"❌ All Pinecone APIs failed: {fallback_error}")
+        # Create a dummy object that will always fail gracefully
+        class DummyPinecone:
+            def Index(self, name):
+                raise Exception("Pinecone unavailable - using database-only mode")
+        
+        pc = DummyPinecone()
+        PINECONE_NEW_API = False
 
 async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
     """Main async LLM query function with proper database storage"""
