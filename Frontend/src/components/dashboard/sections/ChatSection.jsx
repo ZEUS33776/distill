@@ -118,16 +118,6 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
         console.log('Object has body property, returning:', content.body)
         return formatTextAsString(String(content.body))
       }
-      // Handle quiz question arrays (if it's an array of questions)
-      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].question) {
-        console.log('Detected quiz questions array, formatting as quiz summary')
-        return `Quiz: ${content.length} questions`
-      }
-      // Handle flashcards arrays (if it's an array of flashcards)
-      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].front) {
-        console.log('Detected flashcards array, formatting as flashcards summary')
-        return `Flashcards: ${content.length} notes`
-      }
       // Handle quiz question objects directly (the problematic case)
       else if (content.question && content.options && content.answer) {
         console.log('Detected quiz question object, formatting as text')
@@ -522,7 +512,7 @@ const ChatSection = () => {
     }
     console.log('❌ Not a special response, returning false')
     return false
-  }, [navigate])
+  }, [navigate, currentSession])
 
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() || aiLoading) return
@@ -682,13 +672,17 @@ const ChatSection = () => {
       }
 
       // Check if this is a special response (quiz or flashnotes) that requires tab switching
+      console.log('🎯 About to check special response with:', response)
       const isSpecialResponse = handleSpecialResponse(response)
+      console.log('🎯 handleSpecialResponse returned:', isSpecialResponse)
       
       // If it's a special response, don't add it to chat - it will be handled by the target tab
       if (isSpecialResponse) {
-        console.log('Special response handled, skipping chat message creation')
+        console.log('✅ Special response handled, skipping chat message creation')
         return
       }
+      
+      console.log('❌ Not a special response, continuing with regular chat message creation')
 
 
 
