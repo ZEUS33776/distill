@@ -15,10 +15,23 @@ load_dotenv()
 try:
     from pinecone import Pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    
+    if not pinecone_api_key:
+        raise ValueError("PINECONE_API_KEY not found")
+    
     pc = Pinecone(api_key=pinecone_api_key)
-    PINECONE_NEW_API = True
-    print(f"🔗 Using NEW Pinecone API (v{pc.__class__.__module__})")
-except ImportError:
+    
+    # Test that the new API works by listing indexes
+    try:
+        indexes = pc.list_indexes()
+        print(f"🔗 Using NEW Pinecone API - Found {len(indexes)} indexes")
+        PINECONE_NEW_API = True
+    except Exception as init_error:
+        print(f"⚠️ NEW API initialization test failed: {init_error}")
+        raise ImportError("New API failed initialization test")
+        
+except (ImportError, ValueError) as e:
+    print(f"🔗 NEW API unavailable ({e}), using OLD API fallback")
     # Fallback to older API
     import pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
@@ -166,16 +179,10 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         
         # Try to get context from Pinecone (with error handling)
         try:
-            print(f"🔍 Attempting Pinecone connection using {'NEW' if PINECONE_NEW_API else 'OLD'} API")
-            print(f"🔍 Index name: {index_name}")
-            print(f"🔍 API key length: {len(pinecone_api_key) if pinecone_api_key else 'None'}")
-            
             if PINECONE_NEW_API:
                 index = pc.Index(index_name)
-                print(f"🔍 NEW API - Index object created: {type(index)}")
             else:
                 index = pc.Index(index_name)
-                print(f"🔍 OLD API - Index object created: {type(index)}")
 
             # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
             embedding_results = index.query(

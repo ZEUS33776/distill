@@ -9,9 +9,23 @@ load_dotenv()
 try:
     from pinecone import Pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    
+    if not pinecone_api_key:
+        raise ValueError("PINECONE_API_KEY not found")
+    
     pc = Pinecone(api_key=pinecone_api_key)
-    PINECONE_NEW_API = True
-except ImportError:
+    
+    # Test that the new API works by listing indexes
+    try:
+        indexes = pc.list_indexes()
+        print(f"🔗 Using NEW Pinecone API - Found {len(indexes)} indexes")
+        PINECONE_NEW_API = True
+    except Exception as init_error:
+        print(f"⚠️ NEW API initialization test failed: {init_error}")
+        raise ImportError("New API failed initialization test")
+        
+except (ImportError, ValueError) as e:
+    print(f"🔗 NEW API unavailable ({e}), using OLD API fallback")
     # Fallback to older API
     import pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
