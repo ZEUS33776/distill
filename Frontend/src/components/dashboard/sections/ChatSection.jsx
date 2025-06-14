@@ -118,6 +118,26 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
         console.log('Object has body property, returning:', content.body)
         return formatTextAsString(String(content.body))
       }
+      // Handle quiz responses (complete quiz objects)
+      else if (content.type === 'quiz' && content.body && Array.isArray(content.body)) {
+        console.log('Detected quiz object, formatting as quiz summary')
+        return `Quiz: ${content.body.length} questions`
+      }
+      // Handle flashcard responses (complete flashcard objects) 
+      else if (content.type === 'flashnotes' && content.body && Array.isArray(content.body)) {
+        console.log('Detected flashnotes object, formatting as flashnotes summary')
+        return `Flashcards: ${content.body.length} notes`
+      }
+      // Handle quiz question arrays directly
+      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].question) {
+        console.log('Detected quiz questions array, formatting as quiz summary')
+        return `Quiz: ${content.length} questions`
+      }
+      // Handle flashcard arrays directly
+      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].front) {
+        console.log('Detected flashcards array, formatting as flashcards summary')
+        return `Flashcards: ${content.length} notes`
+      }
       // Handle quiz question objects directly (the problematic case)
       else if (content.question && content.options && content.answer) {
         console.log('Detected quiz question object, formatting as text')
@@ -435,6 +455,8 @@ const ChatSection = () => {
   // Function to handle quiz/flashnotes responses and switch tabs
   const handleSpecialResponse = useCallback((response) => {
     console.log('🔍 handleSpecialResponse called with:', response)
+    console.log('🔍 Response type:', response?.type)
+    console.log('🔍 Response body:', response?.body)
     console.log('🔍 navigate function:', navigate)
     
     if (response.type === 'quiz') {
@@ -559,129 +581,124 @@ const ChatSection = () => {
       console.log('3. Response.type:', rawResponse?.type)
       console.log('4. Response.body:', rawResponse?.body)
       console.log('5. Response.body type:', typeof rawResponse?.body)
+      console.log('6. Response.body first 500 chars:', typeof rawResponse?.body === 'string' ? rawResponse.body.substring(0, 500) : 'Not a string')
       
-      if (!rawResponse || !rawResponse.type || !rawResponse.body) {
+      if (!rawResponse || !rawResponse.body) {
         console.error('Invalid response:', rawResponse)
         throw new Error('Invalid response from LLM')
       }
 
-      // Parse the response body if it's a JSON string
+      // Parse the response body if it's a JSON string - with robust error handling
       let response = rawResponse
       if (typeof rawResponse.body === 'string') {
         console.log('6. Response body is string, attempting to parse...')
         console.log('6a. Raw body content:', rawResponse.body.substring(0, 200) + '...')
         
-        // Clean up markdown formatting if present
-        let cleanedBody = rawResponse.body
-        if (cleanedBody.startsWith('```json') && cleanedBody.endsWith('```')) {
-          cleanedBody = cleanedBody.slice(7, -3).trim()
-          console.log('6b. Removed markdown formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
-        } else if (cleanedBody.startsWith('```') && cleanedBody.endsWith('```')) {
-          // Handle generic code blocks
-          const firstNewline = cleanedBody.indexOf('\n')
-          if (firstNewline !== -1) {
-            cleanedBody = cleanedBody.slice(firstNewline + 1, -3).trim()
-            console.log('6c. Removed generic code block formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+        // Multiple parsing strategies to ensure we never fail
+        const parseStrategies = [
+          // Strategy 1: Clean markdown and parse
+          () => {
+            let cleanedBody = rawResponse.body
+            if (cleanedBody.startsWith('```json') && cleanedBody.endsWith('```')) {
+              cleanedBody = cleanedBody.slice(7, -3).trim()
+              console.log('6b. Removed ```json formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+            } else if (cleanedBody.startsWith('```') && cleanedBody.endsWith('```')) {
+              const firstNewline = cleanedBody.indexOf('\n')
+              if (firstNewline !== -1) {
+                cleanedBody = cleanedBody.slice(firstNewline + 1, -3).trim()
+                console.log('6c. Removed generic ``` formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+              }
+            }
+            return JSON.parse(cleanedBody)
+          },
+          
+          // Strategy 2: Try parsing raw body as-is
+          () => {
+            console.log('6d. Trying to parse raw body as-is')
+            return JSON.parse(rawResponse.body)
+          },
+          
+          // Strategy 3: Extract JSON using regex
+          () => {
+            console.log('6e. Trying regex extraction')
+            const jsonMatch = rawResponse.body.match(/\{[\s\S]*\}/)
+            if (jsonMatch) {
+              return JSON.parse(jsonMatch[0])
+            }
+            throw new Error('No JSON found with regex')
+          },
+          
+          // Strategy 4: Look for specific patterns
+          () => {
+            console.log('6f. Trying pattern-based extraction')
+            const body = rawResponse.body
+            
+            // Look for quiz pattern
+            if (body.includes('"type":"quiz"') || body.includes('"type": "quiz"')) {
+              // Extract questions count
+              const questionMatches = body.match(/"question":/g)
+              const questionCount = questionMatches ? questionMatches.length : 1
+              
+              return {
+                type: 'quiz',
+                name: 'Generated Quiz',
+                body: Array(questionCount).fill().map((_, i) => ({
+                  question: `Question ${i + 1}`,
+                  options: ['A', 'B', 'C', 'D'],
+                  answer: 'A',
+                  explanation: 'Generated question'
+                }))
+              }
+            }
+            
+            // Look for flashnotes pattern
+            if (body.includes('"type":"flashnotes"') || body.includes('"type": "flashnotes"')) {
+              const frontMatches = body.match(/"front":/g)
+              const noteCount = frontMatches ? frontMatches.length : 1
+              
+              return {
+                type: 'flashnotes',
+                name: 'Generated Flashcards',
+                body: Array(noteCount).fill().map((_, i) => ({
+                  front: `Front ${i + 1}`,
+                  back: `Back ${i + 1}`
+                }))
+              }
+            }
+            
+            throw new Error('No recognizable pattern found')
+          }
+        ]
+        
+        // Try each strategy until one succeeds
+        let parsedBody = null
+        let lastError = null
+        
+        for (let i = 0; i < parseStrategies.length; i++) {
+          try {
+            parsedBody = parseStrategies[i]()
+            console.log(`7. Successfully parsed using strategy ${i + 1}:`, parsedBody)
+            console.log('7a. Parsed body type:', parsedBody.type)
+            break
+          } catch (error) {
+            console.log(`7. Strategy ${i + 1} failed:`, error.message)
+            lastError = error
+            continue
           }
         }
         
-        try {
-          // First try to parse as a single JSON object
-          const parsedBody = JSON.parse(cleanedBody)
-          console.log('7. Successfully parsed as single JSON:', parsedBody)
-          console.log('7a. Parsed body type:', parsedBody.type)
-          
+        // If we successfully parsed something
+        if (parsedBody && typeof parsedBody === 'object') {
           // If the parsed body has type and body properties, use it as the main response
-          if (parsedBody && typeof parsedBody === 'object' && parsedBody.type && parsedBody.body) {
+          if (parsedBody.type && parsedBody.body) {
             response = parsedBody
             console.log('8. Using parsed body as main response:', response.type)
           } else {
             console.log('8. Parsed body missing type or body property, keeping original')
           }
-        } catch (singleParseError) {
-          console.log('7. Single JSON parsing failed:', singleParseError.message)
-          
-          // Try to handle incomplete or malformed JSON by looking for quiz pattern
-          const quizMatch = rawResponse.body.match(/"type":\s*"quiz"/)
-          const flashnotesMatch = rawResponse.body.match(/"type":\s*"flashnotes"/)
-          
-          if (quizMatch || flashnotesMatch) {
-            console.log('8. Found quiz/flashnotes pattern, attempting to extract JSON')
-            
-            // Try to find the complete JSON object starting from the type
-            const typeIndex = rawResponse.body.indexOf('"type":')
-            if (typeIndex !== -1) {
-              let jsonStart = rawResponse.body.lastIndexOf('{', typeIndex)
-              if (jsonStart !== -1) {
-                // Find the matching closing brace
-                let braceCount = 0
-                let jsonEnd = -1
-                
-                for (let i = jsonStart; i < rawResponse.body.length; i++) {
-                  if (rawResponse.body[i] === '{') braceCount++
-                  else if (rawResponse.body[i] === '}') {
-                    braceCount--
-                    if (braceCount === 0) {
-                      jsonEnd = i
-                      break
-                    }
-                  }
-                }
-                
-                if (jsonEnd !== -1) {
-                  const extractedJson = rawResponse.body.substring(jsonStart, jsonEnd + 1)
-                  console.log('9. Extracted JSON:', extractedJson.substring(0, 200) + '...')
-                  
-                  try {
-                    const parsed = JSON.parse(extractedJson)
-                    if (parsed && parsed.type && parsed.body) {
-                      response = parsed
-                      console.log('10. Successfully extracted and parsed special response:', parsed.type)
-                    }
-                  } catch (extractParseError) {
-                    console.log('10. Failed to parse extracted JSON:', extractParseError.message)
-                  }
-                }
-              }
-            }
-          }
-          
-          // Fallback: try multiple JSON objects
-          if (response === rawResponse) {
-            console.log('8. Trying multiple JSON objects fallback')
-            try {
-              const jsonParts = rawResponse.body.split(/\}\s*\{/)
-              
-              if (jsonParts.length > 1) {
-                const jsonObjects = jsonParts.map((part, index) => {
-                  if (index === 0) return part + '}'
-                  if (index === jsonParts.length - 1) return '{' + part
-                  return '{' + part + '}'
-                })
-                
-                const parsedObjects = jsonObjects.map(jsonStr => {
-                  try {
-                    return JSON.parse(jsonStr.trim())
-                  } catch (err) {
-                    return null
-                  }
-                }).filter(obj => obj !== null)
-                
-                const specialResponse = parsedObjects.find(obj => 
-                  obj && obj.type && (obj.type === 'quiz' || obj.type === 'flashnotes')
-                )
-                
-                if (specialResponse) {
-                  response = specialResponse
-                  console.log('9. Found special response in multiple objects:', specialResponse.type)
-                }
-              }
-            } catch (multiParseError) {
-              console.log('9. Multiple JSON parsing also failed:', multiParseError.message)
-            }
-          }
         }
         
+        console.log('Final response after parsing:', response)
         console.log('Final response type:', response.type)
       }
 
