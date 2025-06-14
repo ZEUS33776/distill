@@ -145,48 +145,63 @@ User Query: {query}\n\nContext: {context}"""
 async def getContext(query_vector, user_id, session_id, index_name="chatbot-index"):
     try:
         print(f"🔍 Getting context for user {user_id}, session {session_id}")
-        index = pc.Index(index_name)
+        
+        # Initialize context variables
+        embedding_results = {"matches": []}
+        relevant_message_results = {"matches": []}
+        
+        # Try to get context from Pinecone (with error handling)
+        try:
+            index = pc.Index(index_name)
 
-        # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
-        embedding_results = index.query(
-            vector=query_vector,
-            top_k=3,
-            filter={
-                "user_id": user_id,
-                "session_id": session_id,
-                "type": "embedding"
-            },
-            include_metadata=True,
-            namespace=user_id
-        )
+            # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
+            embedding_results = index.query(
+                vector=query_vector,
+                top_k=3,
+                filter={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "type": "embedding"
+                },
+                include_metadata=True,
+                namespace=user_id
+            )
 
-        # 2. Query for relevant messages from Pinecone - same session only
-        relevant_message_results = index.query(
-            vector=query_vector,
-            top_k=5,
-            filter={
-                "user_id": user_id,
-                "session_id": session_id,
-                "type": "message"
-            },
-            include_metadata=True,
-            namespace=user_id
-        )
+            # 2. Query for relevant messages from Pinecone - same session only
+            relevant_message_results = index.query(
+                vector=query_vector,
+                top_k=5,
+                filter={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "type": "message"
+                },
+                include_metadata=True,
+                namespace=user_id
+            )
+            print(f"✅ Pinecone context retrieved successfully")
+            
+        except Exception as pinecone_error:
+            print(f"❌ Error getting context from Pinecone: {pinecone_error}")
+            print(f"💡 Falling back to database-only context")
+            # Continue with empty Pinecone results, will use database context below
 
-        # 3. Get last 5 conversations from PostgreSQL database (chronological)
+        # 3. Get comprehensive conversation history from PostgreSQL database
         recent_conversation_context = []
         try:
             async with db.get_connection() as conn:
-                # Get last 5 messages ordered by timestamp DESC, then reverse for chronological order
+                # Get more messages when Pinecone fails to provide better context
+                limit = 20 if not embedding_results.get("matches") else 10
+                
                 recent_messages = await conn.fetch(
                     """
                     SELECT role, content, timestamp 
                     FROM messages 
                     WHERE session_id = $1 
                     ORDER BY timestamp DESC 
-                    LIMIT 10
+                    LIMIT $2
                     """,
-                    session_id
+                    session_id, limit
                 )
                 
                 # Reverse to get chronological order (oldest to newest)
@@ -194,11 +209,11 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
                 
                 for msg in recent_messages:
                     role = msg['role']
-                    content = msg['content']
+                    content = str(msg['content'])[:500]  # Limit content length
                     timestamp = msg['timestamp'].strftime("%H:%M")
                     recent_conversation_context.append(f"[{timestamp}] {role.title()}: {content}")
                 
-                print(f"📚 Found {len(recent_messages)} recent conversation messages")
+                print(f"📚 Found {len(recent_messages)} recent conversation messages (limit: {limit})")
                 
         except Exception as db_error:
             print(f"⚠️ Error fetching conversation history: {db_error}")
@@ -285,6 +300,8 @@ async def store_message_async(query, user_type, session_id, user_id, index_name=
             print(f"✅ Pinecone storage successful ({user_type})")
         except Exception as pinecone_error:
             print(f"⚠️ Pinecone storage failed ({user_type}): {pinecone_error}")
+            # Don't fail the entire operation if Pinecone storage fails
+            # Database storage is more critical
         
         # Log storage completion time
         end_time = datetime.now()

@@ -53,8 +53,8 @@ def create_index_if_not_exists(index_name="chatbot-index", dimension=1024):
             dimension=dimension,
             metric="cosine",
             spec=ServerlessSpec(
-                cloud="aws",
-                region="us-east-1"
+                cloud="gcp",
+                region="us-central1"
             )
         )
         print(f"✅ Created index '{index_name}' with dimension {dimension}")
