@@ -1175,8 +1175,8 @@ const FlashcardsSection = () => {
 
 
 
-          {/* Empty State when no flashcards */}
-          {(!aiFlashnotesData || aiFlashnotesData.length === 0) && !showAiBanner && (
+          {/* Empty State when no flashcards - only show when both user flashnotes and AI flashnotes are empty */}
+          {!loadingFlashnotes && userFlashnotes.length === 0 && (!aiFlashnotesData || aiFlashnotesData.length === 0) && !showAiBanner && (
             <div className="mt-12 text-center py-16">
               <div className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
                 <BookOpen className="h-12 w-12 text-gray-400" />

@@ -118,6 +118,16 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
         console.log('Object has body property, returning:', content.body)
         return formatTextAsString(String(content.body))
       }
+      // Handle quiz question arrays (if it's an array of questions)
+      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].question) {
+        console.log('Detected quiz questions array, formatting as quiz summary')
+        return `Quiz: ${content.length} questions`
+      }
+      // Handle flashcards arrays (if it's an array of flashcards)
+      else if (Array.isArray(content) && content.length > 0 && content[0] && content[0].front) {
+        console.log('Detected flashcards array, formatting as flashcards summary')
+        return `Flashcards: ${content.length} notes`
+      }
       // Handle quiz question objects directly (the problematic case)
       else if (content.question && content.options && content.answer) {
         console.log('Detected quiz question object, formatting as text')
