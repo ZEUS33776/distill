@@ -50,9 +50,20 @@ async def process_youtube_video_endpoint(url: str, user_id: str = None, session_
         print(f"❌ [YT-BACKEND] Error message: {str(e)}")
         print(f"❌ [YT-BACKEND] Error details: {repr(e)}")
         
+        # Provide more user-friendly error messages
+        error_message = str(e)
+        if "429" in error_message or "Too Many Requests" in error_message:
+            error_message = "YouTube is currently rate limiting requests. Please try again in a few minutes, or try a different video."
+        elif "TranscriptsDisabled" in error_message:
+            error_message = "This video has transcripts disabled by the creator."
+        elif "NoTranscriptFound" in error_message:
+            error_message = "No transcript is available for this video."
+        elif "VideoUnavailable" in error_message:
+            error_message = "This video is unavailable or private."
+        
         error_response = {
-            "success": False, 
-            "error": str(e),
+            "success": False,
+            "error": error_message,
             "error_type": type(e).__name__,
             "processing_time_seconds": round(processing_time, 2)
         }

@@ -15,10 +15,14 @@ def fetch_video_id(url):
 
 def get_transcript_api(video_id):
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+        # Try multiple language options
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
         return " ".join([entry['text'] for entry in transcript_list])
     except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable, ParseError) as e:
-        print(f"Transcript API fallback triggered: {e}")
+        print(f"🔄 [YT-HANDLER] Transcript API fallback triggered: {e}")
+        return None
+    except Exception as e:
+        print(f"🔄 [YT-HANDLER] Transcript API unexpected error: {e}")
         return None
 
 def get_auto_caption_url(video_url, lang='en'):
@@ -147,8 +151,8 @@ def process_youtube_video(url):
 
         # Step 3: Store in file with metadata at top
         print(f"🎬 [YT-HANDLER] Step 3: Saving transcript to file...")
-        os.makedirs("parsed_files", exist_ok=True)
-        filename = os.path.join("parsed_files", f"{video_id}.txt")
+        os.makedirs("Parsed_files", exist_ok=True)
+        filename = os.path.join("Parsed_files", f"{video_id}.txt")
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write(f"### SOURCE: youtube\n### URL: {url}\n\n")
