@@ -571,9 +571,23 @@ const ChatSection = () => {
         console.log('6. Response body is string, attempting to parse...')
         console.log('6a. Raw body content:', rawResponse.body.substring(0, 200) + '...')
         
+        // Clean up markdown formatting if present
+        let cleanedBody = rawResponse.body
+        if (cleanedBody.startsWith('```json') && cleanedBody.endsWith('```')) {
+          cleanedBody = cleanedBody.slice(7, -3).trim()
+          console.log('6b. Removed markdown formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+        } else if (cleanedBody.startsWith('```') && cleanedBody.endsWith('```')) {
+          // Handle generic code blocks
+          const firstNewline = cleanedBody.indexOf('\n')
+          if (firstNewline !== -1) {
+            cleanedBody = cleanedBody.slice(firstNewline + 1, -3).trim()
+            console.log('6c. Removed generic code block formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+          }
+        }
+        
         try {
           // First try to parse as a single JSON object
-          const parsedBody = JSON.parse(rawResponse.body)
+          const parsedBody = JSON.parse(cleanedBody)
           console.log('7. Successfully parsed as single JSON:', parsedBody)
           console.log('7a. Parsed body type:', parsedBody.type)
           
