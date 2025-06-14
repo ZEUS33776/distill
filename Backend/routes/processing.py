@@ -38,7 +38,7 @@ async def content_to_embeddings(request: ContentToEmbeddingsRequest):
     try:
         # Step 1: Chunk all files in parsed_files
         print(f"🔄 [EMBED-BACKEND] Step 1: Reading and chunking files...")
-        chunks = read_and_chunk_files(folder_path="./Parsed_files", chunk_size=request.chunk_size)
+        chunks = read_and_chunk_files(chunk_size=request.chunk_size)
         print(f"🔄 [EMBED-BACKEND] Chunks created: {len(chunks)}")
         
         if chunks:

@@ -1,14 +1,33 @@
 import os
+from pathlib import Path
 
-def read_and_chunk_files(folder_path="./Parsed_files", chunk_size=500, char_limit=2000):
+def read_and_chunk_files(folder_path=None, chunk_size=500, char_limit=2000):
+    # Default to Parsed_files directory relative to the Backend folder
+    if folder_path is None:
+        # Get the directory where this script is located (Processing folder)
+        current_dir = Path(__file__).parent
+        # Go up one level to Backend folder, then into Parsed_files
+        folder_path = current_dir.parent / "Parsed_files"
+    
+    folder_path = str(folder_path)  # Convert Path to string for compatibility
     """
     Reads .txt files, splits into chunks with metadata,
     including source and URL/filename parsed from file header.
     Supports both YouTube and PDF metadata formats.
     """
+    print(f"🔍 [READ-CHUNK] Looking for files in: {folder_path}")
+    print(f"🔍 [READ-CHUNK] Directory exists: {os.path.exists(folder_path)}")
+    
     all_chunks = []
 
-    for filename in os.listdir(folder_path):
+    try:
+        files_in_dir = os.listdir(folder_path)
+        print(f"🔍 [READ-CHUNK] Files found: {files_in_dir}")
+    except Exception as e:
+        print(f"❌ [READ-CHUNK] Error accessing directory {folder_path}: {e}")
+        return []
+
+    for filename in files_in_dir:
         if filename.endswith(".txt"):
             file_path = os.path.join(folder_path, filename)
             with open(file_path, "r", encoding="utf-8") as f:
@@ -72,7 +91,6 @@ def read_and_chunk_files(folder_path="./Parsed_files", chunk_size=500, char_limi
     return all_chunks
 
 if __name__ == "__main__":
-    folder = "./Parsed_files"
-    chunks = read_and_chunk_files(folder)
+    chunks = read_and_chunk_files()
     print("Sample chunk text:\n", chunks[0]['text'][:500])
     print("Sample chunk metadata:", {k: v for k, v in chunks[0].items() if k != 'text'})

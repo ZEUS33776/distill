@@ -117,10 +117,12 @@ def process_pdf_file(pdf_path, source_name=None,user_id=None):
         source_name = source_name or pdf_filename
         
         # Create Parsed_files directory if it doesn't exist
-        os.makedirs("Parsed_files", exist_ok=True)
+        current_dir = Path(__file__).parent  # Ingestion folder
+        parsed_files_dir = current_dir.parent / "Parsed_files"  # Backend/Parsed_files
+        parsed_files_dir.mkdir(exist_ok=True)
         
         # Save with metadata header
-        output_filename = os.path.join("Parsed_files", f"{pdf_filename}.txt")
+        output_filename = parsed_files_dir / f"{pdf_filename}.txt"
         
         with open(output_filename, "w", encoding="utf-8") as f:
             f.write(f"### SOURCE: pdf\n")

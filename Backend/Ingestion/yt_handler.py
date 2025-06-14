@@ -2,6 +2,7 @@ import yt_dlp
 import requests
 import re
 import os
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
 from xml.etree.ElementTree import ParseError  # Needed to catch XML parsing errors
@@ -151,8 +152,15 @@ def process_youtube_video(url):
 
         # Step 3: Store in file with metadata at top
         print(f"🎬 [YT-HANDLER] Step 3: Saving transcript to file...")
-        os.makedirs("Parsed_files", exist_ok=True)
-        filename = os.path.join("Parsed_files", f"{video_id}.txt")
+        
+        # Get absolute path to Parsed_files directory
+        current_dir = Path(__file__).parent  # Ingestion folder
+        parsed_files_dir = current_dir.parent / "Parsed_files"  # Backend/Parsed_files
+        print(f"🎬 [YT-HANDLER] Saving to directory: {parsed_files_dir}")
+        parsed_files_dir.mkdir(exist_ok=True)
+        
+        filename = parsed_files_dir / f"{video_id}.txt"
+        print(f"🎬 [YT-HANDLER] Full file path: {filename}")
 
         with open(filename, "w", encoding="utf-8") as f:
             f.write(f"### SOURCE: youtube\n### URL: {url}\n\n")
