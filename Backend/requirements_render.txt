@@ -1,20 +1,30 @@
+# Render Production Requirements
+# Core framework
 fastapi>=0.100.0,<0.105.0
 uvicorn[standard]>=0.20.0,<0.25.0
 python-multipart>=0.0.6
+
+# Utilities
 requests>=2.31.0
 python-dotenv>=1.0.0
+
+# AI/ML APIs - NEW Pinecone API only
 cohere>=4.30.0
-# Updated to NEW Pinecone API (force rebuild)
 pinecone>=7.0.0
+
+# Content processing
 yt-dlp>=2023.11.0
 youtube-transcript-api>=0.6.0
 PyPDF2>=3.0.0
 PyMuPDF>=1.23.0
-# Authentication dependencies
+
+# Authentication
 PyJWT>=2.8.0
 passlib[bcrypt]>=1.7.4
 email-validator>=2.0.0
-# Database dependencies
+
+# Database
 asyncpg>=0.29.0
-# LLM dependencies
+
+# LLM
 groq>=0.4.0 

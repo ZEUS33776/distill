@@ -15,6 +15,15 @@ load_dotenv()
 try:
     # Using NEW API (pinecone>=7.0.0)
     from pinecone import Pinecone
+    
+    # Log package version for debugging
+    try:
+        import pinecone
+        version = getattr(pinecone, '__version__', 'unknown')
+        print(f"📦 Pinecone package version: {version}")
+    except:
+        print("📦 Could not determine Pinecone package version")
+    
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
     
     if not pinecone_api_key:
@@ -33,6 +42,20 @@ try:
         
 except (ImportError, ValueError) as e:
     print(f"❌ Pinecone unavailable ({e}) - using database-only mode")
+    
+    # Log more details about the import error
+    try:
+        import pinecone
+        version = getattr(pinecone, '__version__', 'unknown')
+        print(f"📦 Found pinecone package version: {version}")
+        print(f"📦 Package location: {pinecone.__file__}")
+        
+        # Check what's available in the package
+        available_attrs = [attr for attr in dir(pinecone) if not attr.startswith('_')]
+        print(f"📦 Available attributes: {available_attrs[:10]}...")  # Show first 10
+        
+    except ImportError:
+        print("📦 No pinecone package found at all")
     
     # Create a dummy object that will always fail gracefully
     class DummyPinecone:
