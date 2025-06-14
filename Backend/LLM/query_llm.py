@@ -99,21 +99,42 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
         if relevant_embeddings and relevant_embeddings.strip():
             context_parts.append(f"Knowledge Base Context: {relevant_embeddings}")
             print(f"📚 Knowledge Base Context: {len(relevant_embeddings)} characters")
-            print(f"📚 Knowledge Base Preview: {relevant_embeddings[:200]}...")
+            if len(relevant_embeddings) <= 1000:
+                print(f"📚 FULL Knowledge Base Context:")
+                print(f"{'='*60}")
+                print(relevant_embeddings)
+                print(f"{'='*60}")
+            else:
+                print(f"📚 Knowledge Base Preview (first 500 chars):")
+                print(f"{'='*60}")
+                print(relevant_embeddings[:500] + "...")
+                print(f"{'='*60}")
         else:
             print(f"📚 Knowledge Base Context: None")
             
         if relevant_messages and relevant_messages.strip():
             context_parts.append(f"Relevant Previous Messages: {relevant_messages}")
             print(f"💬 Relevant Messages Context: {len(relevant_messages)} characters")
-            print(f"💬 Relevant Messages Preview: {relevant_messages[:200]}...")
+            print(f"💬 FULL Relevant Messages Context:")
+            print(f"{'='*60}")
+            print(relevant_messages)
+            print(f"{'='*60}")
         else:
             print(f"💬 Relevant Messages Context: None")
             
         if recent_messages and recent_messages.strip():
             context_parts.append(f"Recent Conversation History: {recent_messages}")
             print(f"🕒 Recent Chat History: {len(recent_messages)} characters")
-            print(f"🕒 Recent Chat Preview: {recent_messages[:200]}...")
+            if len(recent_messages) <= 2000:
+                print(f"🕒 FULL Recent Chat History:")
+                print(f"{'='*60}")
+                print(recent_messages)
+                print(f"{'='*60}")
+            else:
+                print(f"🕒 Recent Chat Preview (first 1000 chars):")
+                print(f"{'='*60}")
+                print(recent_messages[:1000] + "...")
+                print(f"{'='*60}")
         else:
             print(f"🕒 Recent Chat History: None")
         
@@ -305,11 +326,19 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
 
         # Extract relevant messages context
         relevant_messages_context = []
-        for match in relevant_message_results.get("matches", []):
+        print(f"🔍 Processing {len(relevant_message_results.get('matches', []))} relevant message matches...")
+        
+        for i, match in enumerate(relevant_message_results.get("matches", [])):
+            print(f"📝 Match {i+1}: Score={match.get('score', 'N/A')}")
             if "text" in match.get("metadata", {}):
                 user_type = match["metadata"].get("user_type", "unknown")
                 timestamp = match["metadata"].get("timestamp", "")
                 text = match["metadata"]["text"]
+                session_id = match["metadata"].get("session_id", "unknown")
+                
+                print(f"   - User: {user_type}, Session: {session_id}")
+                print(f"   - Text: {text[:100]}...")
+                
                 if timestamp:
                     try:
                         # Parse ISO timestamp and format as HH:MM
@@ -321,6 +350,8 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
                         relevant_messages_context.append(f"{user_type.title()}: {text}")
                 else:
                     relevant_messages_context.append(f"{user_type.title()}: {text}")
+            else:
+                print(f"   - No text metadata found in match {i+1}")
 
         # Convert to text
         recent_messages_text = "\n".join(recent_conversation_context) if recent_conversation_context else ""
