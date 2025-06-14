@@ -1,0 +1,30 @@
+# Core framework
+fastapi>=0.104.0,<0.105.0
+uvicorn[standard]>=0.24.0,<0.25.0
+python-multipart>=0.0.6
+
+# Database
+asyncpg>=0.29.0
+
+# LLM and Embeddings (core functionality)
+groq>=0.4.0
+cohere>=4.30.0
+
+# Authentication
+PyJWT>=2.8.0
+passlib[bcrypt]>=1.7.4
+email-validator>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# PDF Processing (lightweight)
+PyPDF2>=3.0.0
+
+# Video Processing (if needed)
+yt-dlp>=2023.11.0
+youtube-transcript-api>=0.6.0
+
+# Pinecone (optional - app works without it)
+# pinecone-client>=2.2.0 
