@@ -1,7 +1,7 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
-import pinecone
+from pinecone import Pinecone
 from Database.connection import db
 from datetime import datetime
 import uuid
@@ -12,7 +12,7 @@ import asyncio
 # Load environment variables
 load_dotenv()
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
-pinecone.init(api_key=pinecone_api_key, environment="gcp-starter")
+pc = Pinecone(api_key=pinecone_api_key)
 
 async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
     """Main async LLM query function with proper database storage"""
@@ -145,48 +145,63 @@ User Query: {query}\n\nContext: {context}"""
 async def getContext(query_vector, user_id, session_id, index_name="chatbot-index"):
     try:
         print(f"🔍 Getting context for user {user_id}, session {session_id}")
-        index = pinecone.Index(index_name)
+        
+        # Initialize context variables
+        embedding_results = {"matches": []}
+        relevant_message_results = {"matches": []}
+        
+        # Try to get context from Pinecone (with error handling)
+        try:
+            index = pc.Index(index_name)
 
-        # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
-        embedding_results = index.query(
-            vector=query_vector,
-            top_k=3,
-            filter={
-                "user_id": user_id,
-                "session_id": session_id,
-                "type": "embedding"
-            },
-            include_metadata=True,
-            namespace=user_id
-        )
+            # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
+            embedding_results = index.query(
+                vector=query_vector,
+                top_k=3,
+                filter={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "type": "embedding"
+                },
+                include_metadata=True,
+                namespace=user_id
+            )
 
-        # 2. Query for relevant messages from Pinecone - same session only
-        relevant_message_results = index.query(
-            vector=query_vector,
-            top_k=5,
-            filter={
-                "user_id": user_id,
-                "session_id": session_id,
-                "type": "message"
-            },
-            include_metadata=True,
-            namespace=user_id
-        )
+            # 2. Query for relevant messages from Pinecone - same session only
+            relevant_message_results = index.query(
+                vector=query_vector,
+                top_k=5,
+                filter={
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "type": "message"
+                },
+                include_metadata=True,
+                namespace=user_id
+            )
+            print(f"✅ Pinecone context retrieved successfully")
+            
+        except Exception as pinecone_error:
+            print(f"❌ Error getting context from Pinecone: {pinecone_error}")
+            print(f"💡 Falling back to database-only context")
+            # Continue with empty Pinecone results, will use database context below
 
-        # 3. Get last 5 conversations from PostgreSQL database (chronological)
+        # 3. Get comprehensive conversation history from PostgreSQL database
         recent_conversation_context = []
         try:
             async with db.get_connection() as conn:
-                # Get last 5 messages ordered by timestamp DESC, then reverse for chronological order
+                # Get more messages when Pinecone fails to provide better context
+                limit = 20 if not embedding_results.get("matches") else 10
+                
                 recent_messages = await conn.fetch(
                     """
                     SELECT role, content, timestamp 
                     FROM messages 
                     WHERE session_id = $1 
                     ORDER BY timestamp DESC 
-                    LIMIT 10
+                    LIMIT $2
                     """,
-                    session_id
+                    session_id, limit
                 )
                 
                 # Reverse to get chronological order (oldest to newest)
@@ -263,7 +278,7 @@ async def store_message_async(query, user_type, session_id, user_id, index_name=
         # Store in Pinecone (sync operation) - can be slower
         pinecone_success = False
         try:
-            index = pinecone.Index(index_name)
+            index = pc.Index(index_name)
             index.upsert(
                 vectors=[
                     {
