@@ -1,7 +1,7 @@
 import os
 import uuid
 from dotenv import load_dotenv
-from pinecone import Pinecone, ServerlessSpec
+import pinecone
 
 # Load environment variables
 load_dotenv()
@@ -9,13 +9,13 @@ load_dotenv()
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 
 # Initialize Pinecone client
-pc = Pinecone(api_key=pinecone_api_key)
+pinecone.init(api_key=pinecone_api_key, environment="gcp-starter")
 
 def store_embeddings(embeddings, user_id, session_id, index_name="chatbot-index"):
     """
     Store embeddings in Pinecone index.
     """
-    index = pc.Index(index_name)
+    index = pinecone.Index(index_name)
     
     # Prepare vectors for upsert
     items = [
@@ -47,15 +47,11 @@ def create_index_if_not_exists(index_name="chatbot-index", dimension=1024):
     Create Pinecone index if it doesn't exist.
     Default dimension=1024 matches Cohere's embed-english-v3.0 model.
     """
-    if index_name not in pc.list_indexes().names():
-        pc.create_index(
+    if index_name not in pinecone.list_indexes():
+        pinecone.create_index(
             name=index_name,
             dimension=dimension,
-            metric="cosine",
-            spec=ServerlessSpec(
-                cloud="aws",
-                region="us-east-1"
-            )
+            metric="cosine"
         )
         print(f"✅ Created index '{index_name}' with dimension {dimension}")
     else:
