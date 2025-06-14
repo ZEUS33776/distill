@@ -54,6 +54,8 @@ async def process_youtube_video_endpoint(url: str, user_id: str = None, session_
         error_message = str(e)
         if "429" in error_message or "Too Many Requests" in error_message:
             error_message = "YouTube is currently rate limiting requests. Please try again in a few minutes, or try a different video."
+        elif "Sign in to confirm you're not a bot" in error_message or "DownloadError" in str(type(e).__name__):
+            error_message = "YouTube is blocking automated requests. Please try again later, or try a different video. This is a temporary YouTube restriction."
         elif "TranscriptsDisabled" in error_message:
             error_message = "This video has transcripts disabled by the creator."
         elif "NoTranscriptFound" in error_message:

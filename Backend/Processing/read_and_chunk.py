@@ -1,6 +1,6 @@
 import os
 
-def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limit=2000):
+def read_and_chunk_files(folder_path="./Parsed_files", chunk_size=500, char_limit=2000):
     """
     Reads .txt files, splits into chunks with metadata,
     including source and URL/filename parsed from file header.
@@ -72,7 +72,7 @@ def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limi
     return all_chunks
 
 if __name__ == "__main__":
-    folder = "./parsed_files"
+    folder = "./Parsed_files"
     chunks = read_and_chunk_files(folder)
     print("Sample chunk text:\n", chunks[0]['text'][:500])
     print("Sample chunk metadata:", {k: v for k, v in chunks[0].items() if k != 'text'})

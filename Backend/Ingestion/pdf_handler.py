@@ -116,11 +116,11 @@ def process_pdf_file(pdf_path, source_name=None,user_id=None):
         pdf_filename = Path(pdf_path).stem
         source_name = source_name or pdf_filename
         
-        # Create parsed_files directory if it doesn't exist
-        os.makedirs("parsed_files", exist_ok=True)
+        # Create Parsed_files directory if it doesn't exist
+        os.makedirs("Parsed_files", exist_ok=True)
         
         # Save with metadata header
-        output_filename = os.path.join("parsed_files", f"{pdf_filename}.txt")
+        output_filename = os.path.join("Parsed_files", f"{pdf_filename}.txt")
         
         with open(output_filename, "w", encoding="utf-8") as f:
             f.write(f"### SOURCE: pdf\n")
