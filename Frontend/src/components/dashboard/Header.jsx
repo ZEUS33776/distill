@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Search, 
-  Bell, 
   LogOut, 
   Menu,
   ChevronDown,
@@ -11,8 +10,7 @@ import {
   FileText,
   Youtube,
   Sun,
-  Moon,
-  Settings as SettingsIcon
+  Moon
 } from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
 import ThemeToggle from '../common/ThemeToggle'
@@ -20,10 +18,9 @@ import Avatar from '../common/Avatar'
 
 const Header = () => {
   const location = useLocation()
-  const { user, signOut, toggleSidebar, sidebarCollapsed } = useApp()
+  const { user, signOut, toggleSidebar, sidebarCollapsed, darkMode, toggleDarkMode } = useApp()
   
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false)
 
   // Get page title based on current route
   const getPageTitle = () => {
@@ -31,7 +28,7 @@ const Header = () => {
     if (path.includes('/chat')) return 'AI Chat Assistant'
     if (path.includes('/quiz')) return 'Smart Quizzes'
     if (path.includes('/flashcards')) return 'Flashcards'
-    if (path.includes('/settings')) return 'Settings'
+
     if (path.includes('/profile')) return 'Profile'
     return 'Dashboard'
   }
@@ -41,35 +38,12 @@ const Header = () => {
     if (path.includes('/chat')) return 'Have conversations with AI about your study materials'
     if (path.includes('/quiz')) return 'Test your knowledge with adaptive questions'
     if (path.includes('/flashcards')) return 'Study and memorize key concepts'
-    if (path.includes('/settings')) return 'Customize your learning experience'
+
     if (path.includes('/profile')) return 'Manage your account and preferences'
     return 'Your AI-powered study companion'
   }
 
-  // Mock notifications
-  const notifications = [
-    {
-      id: 1,
-      title: 'Quiz completed',
-      message: 'You scored 85% on your Physics quiz',
-      time: '2 minutes ago',
-      type: 'success'
-    },
-    {
-      id: 2,
-      title: 'New flashcards ready',
-      message: '10 new cards generated from your recent study session',
-      time: '1 hour ago',
-      type: 'info'
-    },
-    {
-      id: 3,
-      title: 'Study reminder',
-      message: 'Time to review your Mathematics flashcards',
-      time: '3 hours ago',
-      type: 'reminder'
-    }
-  ]
+
 
   const handleUploadFile = () => {
     // Implementation for file upload
@@ -105,61 +79,6 @@ const Header = () => {
       <div className="flex items-center space-x-2">
         {/* Theme Toggle */}
         <ThemeToggle className="mx-2" />
-
-        {/* Notifications */}
-        <div className="relative">
-          <button
-            onClick={() => setNotificationMenuOpen(!notificationMenuOpen)}
-            className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label="View notifications"
-          >
-            <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            {notifications.length > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            )}
-          </button>
-
-          <AnimatePresence>
-            {notificationMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                transition={{ duration: 0.1 }}
-                className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50"
-              >
-                <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
-                </div>
-                
-                <div className="max-h-64 overflow-y-auto">
-                  {notifications.map((notification) => (
-                    <div key={notification.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                      <div className="flex items-start space-x-3">
-                        <div className={`w-2 h-2 rounded-full mt-2 ${
-                          notification.type === 'success' ? 'bg-green-500' :
-                          notification.type === 'info' ? 'bg-blue-500' :
-                          'bg-yellow-500'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{notification.title}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{notification.message}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{notification.time}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700">
-                  <button className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
-                    View all notifications
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
         {/* User Menu */}
         <div className="relative">
@@ -201,14 +120,21 @@ const Header = () => {
 
                 {/* Menu Items */}
                 <div className="py-2">
-                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <SettingsIcon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Settings</span>
-                  </button>
-                  
-                  <button className="w-full flex items-center space-x-3 px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                    <Sun className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Toggle theme</span>
+                  <button 
+                    onClick={() => {
+                      toggleDarkMode()
+                      setUserMenuOpen(false) // Close the dropdown after toggling
+                    }}
+                    className="w-full flex items-center space-x-3 px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    {darkMode ? (
+                      <Sun className="w-4 h-4 text-yellow-500" />
+                    ) : (
+                      <Moon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    )}
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                    </span>
                   </button>
                 </div>
 
@@ -229,12 +155,11 @@ const Header = () => {
       </div>
 
       {/* Click outside to close menus */}
-      {(userMenuOpen || notificationMenuOpen) && (
+      {userMenuOpen && (
         <div
           className="fixed inset-0 z-40"
           onClick={() => {
             setUserMenuOpen(false)
-            setNotificationMenuOpen(false)
           }}
         />
       )}

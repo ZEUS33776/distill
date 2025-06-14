@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import apiService from '../../../services/api'
 import { 
   Zap, 
   Brain, 
@@ -18,7 +19,8 @@ import {
   BookOpen,
   Check,
   X,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react'
 
 // Sample flashcard sets - can be replaced with API data later
@@ -237,8 +239,38 @@ const FlashcardsSection = () => {
   const [aiFlashnotesData, setAiFlashnotesData] = useState(null)
   const [showAiBanner, setShowAiBanner] = useState(false)
   const [cardRatings, setCardRatings] = useState({}) // Track ratings for each card
+  const [userFlashnotes, setUserFlashnotes] = useState([]) // Store user's flashnotes history
+  const [loadingFlashnotes, setLoadingFlashnotes] = useState(false)
+  const [sessionResults, setSessionResults] = useState(null) // Store session results with comparison
+  const [loadingResults, setLoadingResults] = useState(false)
+  const [sessionStartTime, setSessionStartTime] = useState(null) // Track session start time
 
-  // Check for pending flashnotes data from chat
+  // Function to fetch user flashnotes from backend
+  const fetchUserFlashnotes = async () => {
+    setLoadingFlashnotes(true)
+    try {
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}')
+      const userId = userData.user_id || 'test-user-frontend'
+      
+      console.log('🔍 Fetching flashnotes for user:', userId)
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/study-sessions/user/${userId}/flashnotes`)
+      
+      if (response.ok) {
+        const flashnotes = await response.json()
+        console.log('✅ Fetched user flashnotes:', flashnotes)
+        setUserFlashnotes(flashnotes)
+      } else {
+        console.error('❌ Failed to fetch user flashnotes:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching user flashnotes:', error)
+    } finally {
+      setLoadingFlashnotes(false)
+    }
+  }
+
+  // Check for pending flashnotes data from chat and fetch user flashnotes
   useEffect(() => {
     const pendingFlashnotesData = localStorage.getItem('pendingFlashnotesData')
     if (pendingFlashnotesData) {
@@ -289,6 +321,9 @@ const FlashcardsSection = () => {
         localStorage.removeItem('pendingFlashnotesData')
       }
     }
+    
+    // Fetch user's flashnotes history
+    fetchUserFlashnotes()
   }, [])
 
   // Simple functions
@@ -296,14 +331,69 @@ const FlashcardsSection = () => {
     if (aiFlashnotesData && aiFlashnotesData.length > 0) {
       setCards(aiFlashnotesData)
       setSessionTitle('AI Generated Flashcards')
-      setCurrentCardIndex(0)
-      setIsFlipped(false)
+    setCurrentCardIndex(0)
+    setIsFlipped(false)
       setIsStudying(true)
       setIsComplete(false)
       setCardRatings({})
+      setSessionResults(null) // Clear previous session results
+      setSessionStartTime(Date.now())
       setShowAiBanner(false)
       localStorage.removeItem('pendingFlashnotesData')
     }
+  }
+
+  const startSavedFlashnotes = (savedFlashnotes) => {
+    console.log('🔍 Starting saved flashnotes:', savedFlashnotes)
+    
+    // Handle content - it should already be parsed by the backend
+    let flashnotesContent = savedFlashnotes.content
+    
+    // If for some reason it's still a string, parse it
+    if (typeof flashnotesContent === 'string') {
+      try {
+        flashnotesContent = JSON.parse(flashnotesContent)
+      } catch (error) {
+        console.error('Failed to parse flashnotes content:', error)
+        return
+      }
+    }
+    
+    console.log('🔍 Flashnotes content:', flashnotesContent)
+    
+    // Transform saved flashnotes data to match our flashcard format
+    let transformedFlashcards = []
+    
+    // Handle flashcards structure
+    if (flashnotesContent && flashnotesContent.flashcards && Array.isArray(flashnotesContent.flashcards)) {
+      transformedFlashcards = flashnotesContent.flashcards.map((card, index) => ({
+        id: `saved-${index + 1}`,
+        front: card.front,
+        back: card.back,
+        difficulty: "Mixed",
+        topic: savedFlashnotes.name,
+        tags: ["Saved", "Study Cards"],
+        reviewCount: 0,
+        lastReviewed: new Date().toISOString(),
+        mastered: false,
+        createdAt: savedFlashnotes.created_at
+      }))
+    } else {
+      console.error('Invalid flashnotes content structure:', flashnotesContent)
+      return
+    }
+    
+    console.log('🔍 Transformed flashcards:', transformedFlashcards)
+    
+    setCards(transformedFlashcards)
+    setSessionTitle(savedFlashnotes.name)
+    setCurrentCardIndex(0)
+    setIsFlipped(false)
+    setIsStudying(true)
+    setIsComplete(false)
+    setCardRatings({})
+    setSessionResults(null) // Clear previous session results
+    setSessionStartTime(Date.now())
   }
 
   const startTestSession = () => {
@@ -334,6 +424,7 @@ const FlashcardsSection = () => {
     setIsStudying(true)
     setIsComplete(false)
     setCardRatings({})
+    setSessionResults(null) // Clear previous session results
   }
 
   const dismissAiBanner = () => {
@@ -346,11 +437,13 @@ const FlashcardsSection = () => {
     setIsFlipped(!isFlipped)
   }
 
-  const nextCard = () => {
+  const nextCard = async () => {
     if (currentCardIndex < cards.length - 1) {
       setCurrentCardIndex(currentCardIndex + 1)
       setIsFlipped(false)
     } else {
+      // Session completed - store results
+      await storeFlashcardSessionResult()
       setIsComplete(true)
     }
   }
@@ -385,6 +478,156 @@ const FlashcardsSection = () => {
     setSessionTitle('')
     setIsComplete(false)
     setCardRatings({})
+    setSessionResults(null)
+    setSessionStartTime(null)
+  }
+
+  // Function to store flashcard session results
+  const storeFlashcardSessionResult = async () => {
+    try {
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}')
+      const userId = userData.user_id || 'test-user-frontend'
+      
+      // Calculate session statistics
+      const ratingEntries = Object.values(cardRatings)
+      const easyCards = ratingEntries.filter(entry => entry.rating === 'easy')
+      const mediumCards = ratingEntries.filter(entry => entry.rating === 'medium') 
+      const hardCards = ratingEntries.filter(entry => entry.rating === 'hard')
+      const unratedCards = cards.filter(card => !cardRatings[card.id])
+
+      // Calculate accuracy based on easy/medium vs hard cards
+      const correctAnswers = easyCards.length + mediumCards.length
+      const incorrectAnswers = hardCards.length
+      const skippedAnswers = unratedCards.length
+      const accuracy = cards.length > 0 ? Math.round((correctAnswers / cards.length) * 100) : 0
+
+      // Calculate time spent
+      const timeSpent = sessionStartTime ? Math.round((Date.now() - sessionStartTime) / 1000) : 0
+
+      // Find study session ID based on session type
+      let studySessionId = null
+      if (sessionTitle === 'AI Generated Flashcards' || sessionTitle === 'Test Flashcards') {
+        // For AI-generated or test flashcards, create a unique session ID based on content hash + timestamp
+        // Use a safer method to handle Unicode characters
+        const contentString = JSON.stringify(cards.map(c => c.front + c.back))
+        const flashcardContentHash = btoa(encodeURIComponent(contentString)).slice(0, 10)
+        const timestamp = sessionStartTime || Date.now()
+        studySessionId = `ai-flashcards-${flashcardContentHash}-${timestamp}`
+      } else {
+        // For saved flashcards, try to find the actual study session ID
+        // Look for a saved flashnote with matching name
+        const matchingFlashnote = userFlashnotes.find(fn => fn.name === sessionTitle)
+        studySessionId = matchingFlashnote ? String(matchingFlashnote.id) : `saved-flashcards-${sessionTitle.replace(/\s+/g, '-').toLowerCase()}`
+      }
+
+      // Calculate detailed results
+      const detailedResults = cards.map((card, index) => {
+        const rating = cardRatings[card.id]
+        return {
+          card_id: card.id || index,
+          front: card.front,
+          back: card.back,
+          rating: rating?.rating || 'skipped',
+          is_correct: rating?.rating === 'easy' || rating?.rating === 'medium',
+          difficulty: rating?.rating || 'unrated'
+        }
+      })
+
+      // Calculate difficulty breakdown
+      const difficultyBreakdown = {
+        easy: { correct: easyCards.length, total: easyCards.length },
+        medium: { correct: mediumCards.length, total: mediumCards.length },
+        hard: { correct: 0, total: hardCards.length }
+      }
+
+      const payload = {
+        study_session_id: studySessionId,
+        user_id: userId,
+        session_type: 'flashnotes',
+        session_name: sessionTitle,
+        total_questions: cards.length,
+        correct_answers: correctAnswers,
+        incorrect_answers: incorrectAnswers,
+        skipped_answers: skippedAnswers,
+        accuracy_percentage: accuracy,
+        time_spent_seconds: timeSpent,
+        difficulty_breakdown: difficultyBreakdown,
+        detailed_results: detailedResults
+      }
+
+      console.log('💾 Storing flashcard session result:', payload)
+
+      // Validate payload before sending
+      if (!payload.study_session_id || !payload.user_id || !payload.session_name) {
+        console.error('❌ Invalid payload - missing required fields:', {
+          study_session_id: payload.study_session_id,
+          user_id: payload.user_id,
+          session_name: payload.session_name
+        })
+        return
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/session-results/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Flashcard session result stored successfully:', result)
+        
+        // Fetch comparison data
+        await fetchFlashcardSessionComparison(userId, studySessionId)
+      } else {
+        console.error('❌ Failed to store flashcard session result:', response.status)
+        try {
+          const errorDetail = await response.json()
+          console.error('❌ Detailed error:', errorDetail)
+        } catch (e) {
+          console.error('❌ Error response text:', await response.text())
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error storing flashcard session result:', error)
+    }
+  }
+
+  // Function to fetch flashcard session comparison data
+  const fetchFlashcardSessionComparison = async (userId, studySessionId) => {
+    setLoadingResults(true)
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/session-results/user/${userId}/session/${studySessionId}/comparison`)
+      
+      if (response.ok) {
+        const comparisonData = await response.json()
+        console.log('✅ Fetched flashcard session comparison:', comparisonData)
+        setSessionResults(comparisonData)
+      } else {
+        console.error('❌ Failed to fetch flashcard session comparison:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Error fetching flashcard session comparison:', error)
+    } finally {
+      setLoadingResults(false)
+    }
+  }
+
+  // Function to delete a flashnote
+  const deleteFlashnote = async (flashnoteId, flashnoteName) => {
+    if (window.confirm(`Are you sure you want to delete "${flashnoteName}"? This action cannot be undone.`)) {
+      try {
+        await apiService.deleteStudySession(flashnoteId)
+        // Refresh the flashnotes list
+        await fetchUserFlashnotes()
+        console.log('✅ Flashnote deleted successfully')
+      } catch (error) {
+        console.error('❌ Error deleting flashnote:', error)
+        alert('Failed to delete flashnote. Please try again.')
+      }
+    }
   }
 
   // Simple render logic
@@ -398,7 +641,7 @@ const FlashcardsSection = () => {
 
     return (
       <div className="h-full bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 p-6 overflow-y-auto">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto min-h-full">
           <div className="text-center mb-8">
             <motion.div
               initial={{ scale: 0 }}
@@ -407,15 +650,33 @@ const FlashcardsSection = () => {
             >
               <Trophy className="h-10 w-10 text-white" />
             </motion.div>
-            
+
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
               Session Complete!
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
+            <p className="text-xl text-gray-600 dark:text-gray-300 mb-4">
               You've finished studying {cards.length} flashcards!
             </p>
-          </div>
-
+            
+            {/* Performance Improvement Indicator */}
+            {sessionResults?.improvement_stats && !sessionResults.improvement_stats.is_first_attempt && (
+              <div className="mb-4">
+                {sessionResults.improvement_stats.is_personal_best && (
+                  <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-100 to-orange-100 text-yellow-800 px-4 py-2 rounded-full text-sm font-medium">
+                    <Trophy className="h-4 w-4" />
+                    Personal Best!
+                    </div>
+                )}
+                {sessionResults.improvement_stats.accuracy_improvement > 0 && (
+                  <div className="inline-flex items-center gap-2 bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium ml-2">
+                    <ChevronRight className="h-4 w-4 rotate-90" />
+                    +{sessionResults.improvement_stats.accuracy_improvement}% improvement
+                  </div>
+                )}
+              </div>
+            )}
+                  </div>
+                  
           {/* Rating Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 border border-green-200 dark:border-green-800">
@@ -428,20 +689,107 @@ const FlashcardsSection = () => {
               <Star className="h-8 w-8 text-yellow-600 mx-auto mb-3" />
               <h3 className="text-2xl font-bold text-yellow-600 text-center mb-1">{mediumCards.length}</h3>
               <p className="text-sm text-yellow-700 dark:text-yellow-300 text-center">Medium Cards</p>
-            </div>
+                    </div>
             
             <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 border border-red-200 dark:border-red-800">
               <XCircle className="h-8 w-8 text-red-600 mx-auto mb-3" />
               <h3 className="text-2xl font-bold text-red-600 text-center mb-1">{hardCards.length}</h3>
               <p className="text-sm text-red-700 dark:text-red-300 text-center">Hard Cards</p>
-            </div>
+                    </div>
 
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
               <Clock className="h-8 w-8 text-gray-600 mx-auto mb-3" />
               <h3 className="text-2xl font-bold text-gray-600 text-center mb-1">{unratedCards.length}</h3>
               <p className="text-sm text-gray-700 dark:text-gray-300 text-center">Skipped</p>
+                    </div>
+                  </div>
+                  
+          {/* Previous Results Comparison */}
+          {sessionResults && !loadingResults && (
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 text-center">Performance Comparison</h3>
+              
+              {sessionResults.improvement_stats.is_first_attempt ? (
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6 text-center">
+                  <div className="text-purple-600 dark:text-purple-300 font-medium">🎉 First attempt at this type of flashcard session!</div>
+                  <div className="text-gray-600 dark:text-gray-400 text-sm mt-1">Keep practicing to track your improvement</div>
+                    </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Accuracy Change</div>
+                    <div className={`text-2xl font-bold ${
+                      sessionResults.improvement_stats.accuracy_improvement > 0 ? 'text-green-600' : 
+                      sessionResults.improvement_stats.accuracy_improvement < 0 ? 'text-red-600' : 'text-gray-600'
+                    }`}>
+                      {sessionResults.improvement_stats.accuracy_improvement > 0 ? '+' : ''}
+                      {sessionResults.improvement_stats.accuracy_improvement}%
+                  </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Performance Trend</div>
+                    <div className={`text-lg font-semibold capitalize ${
+                      sessionResults.improvement_stats.performance_trend === 'improving' ? 'text-green-600' : 
+                      sessionResults.improvement_stats.performance_trend === 'declining' ? 'text-red-600' : 'text-purple-600'
+                    }`}>
+                      {sessionResults.improvement_stats.performance_trend}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Previous Best</div>
+                    <div className="text-2xl font-bold text-purple-600">
+                      {sessionResults.improvement_stats.best_previous_accuracy}%
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-center">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Attempts</div>
+                    <div className="text-2xl font-bold text-indigo-600">
+                      {sessionResults.improvement_stats.total_previous_attempts + 1}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Previous Results History */}
+              {sessionResults.previous_results.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Recent Performance History</h4>
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {sessionResults.previous_results.slice(0, 6).map((result, index) => (
+                        <div key={result.id} className="bg-white dark:bg-gray-700 rounded-lg p-3 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {new Date(result.completed_at).toLocaleDateString()}
+                            </span>
+                            <span className={`font-semibold ${
+                              result.accuracy_percentage >= 80 ? 'text-green-600' : 
+                              result.accuracy_percentage >= 60 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                              {result.accuracy_percentage}%
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {result.correct_answers}/{result.total_questions} mastered • {Math.floor(result.time_spent_seconds / 60)}m {result.time_spent_seconds % 60}s
+                          </div>
+                        </div>
+              ))}
             </div>
           </div>
+        </div>
+              )}
+      </div>
+          )}
+
+          {loadingResults && (
+            <div className="mb-8 text-center">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+              <p className="mt-2 text-gray-600 dark:text-gray-300">Loading performance comparison...</p>
+            </div>
+          )}
 
           {/* Detailed Card Lists */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -456,7 +804,7 @@ const FlashcardsSection = () => {
                   {easyCards.map((entry, index) => (
                     <div key={index} className="p-2 bg-green-50 dark:bg-green-900/20 rounded text-sm">
                       <strong className="text-green-800 dark:text-green-200">{entry.card.front}</strong>
-                    </div>
+              </div>
                   ))}
                 </div>
               </div>
@@ -473,10 +821,10 @@ const FlashcardsSection = () => {
                   {mediumCards.map((entry, index) => (
                     <div key={index} className="p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded text-sm">
                       <strong className="text-yellow-800 dark:text-yellow-200">{entry.card.front}</strong>
-                    </div>
+                </div>
                   ))}
                 </div>
-              </div>
+                </div>
             )}
 
             {/* Hard Cards */}
@@ -490,15 +838,15 @@ const FlashcardsSection = () => {
                   {hardCards.map((entry, index) => (
                     <div key={index} className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-sm">
                       <strong className="text-red-800 dark:text-red-200">{entry.card.front}</strong>
-                    </div>
-                  ))}
                 </div>
+                  ))}
+              </div>
               </div>
             )}
           </div>
 
           <div className="flex gap-4 justify-center">
-            <button
+              <button
               onClick={() => {
                 setCurrentCardIndex(0)
                 setIsFlipped(false)
@@ -507,14 +855,14 @@ const FlashcardsSection = () => {
               }}
               className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-200"
             >
-              Study Again
-            </button>
-            <button
-              onClick={resetSession}
+                Study Again
+              </button>
+              <button
+                onClick={resetSession}
               className="px-6 py-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200"
-            >
+              >
               Back to Home
-            </button>
+              </button>
           </div>
         </div>
       </div>
@@ -525,13 +873,13 @@ const FlashcardsSection = () => {
     const currentCard = cards[currentCardIndex]
     const progress = ((currentCardIndex + 1) / cards.length) * 100
 
-    return (
+  return (
       <div className="h-full bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 overflow-y-auto">
-        <div className="p-6">
-          <div className="max-w-3xl mx-auto">
-            {/* Session Header */}
+      <div className="p-6">
+        <div className="max-w-3xl mx-auto">
+          {/* Session Header */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{sessionTitle}</h1>
                 <button
                   onClick={resetSession}
@@ -540,88 +888,88 @@ const FlashcardsSection = () => {
                 >
                   ✕
                 </button>
-              </div>
-              
-              {/* Progress Bar */}
-              <div className="mb-2">
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mb-2">
                 <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
                   <span>Card {currentCardIndex + 1} of {cards.length}</span>
-                  <span>{Math.round(progress)}% Complete</span>
-                </div>
+                <span>{Math.round(progress)}% Complete</span>
+              </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div
                     className="bg-gradient-to-r from-purple-500 to-pink-600 h-2 rounded-full transition-all duration-500"
                     style={{ width: `${progress}%` }}
-                  />
-                </div>
+                />
               </div>
             </div>
+            </div>
 
-            {/* Flashcard */}
+          {/* Flashcard */}
             <div className="relative mb-6" style={{ height: '400px', perspective: '1000px' }}>
               <div
-                className="w-full h-full relative cursor-pointer"
-                onClick={flipCard}
+              className="w-full h-full relative cursor-pointer"
+              onClick={flipCard}
                 style={{ 
                   transform: `rotateY(${isFlipped ? 180 : 0}deg)`,
                   transformStyle: 'preserve-3d',
                   transition: 'transform 0.6s'
                 }}
-              >
-                {/* Front of card */}
-                <div 
+            >
+              {/* Front of card */}
+              <div 
                   className="absolute inset-0 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 p-8 flex flex-col items-center justify-center"
-                  style={{ backfaceVisibility: 'hidden' }}
-                >
-                  <div className="text-center">
-                    <div className="text-sm text-purple-600 font-medium mb-2">FRONT</div>
+                style={{ backfaceVisibility: 'hidden' }}
+              >
+                <div className="text-center">
+                  <div className="text-sm text-purple-600 font-medium mb-2">FRONT</div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">{currentCard.front}</h2>
                     <p className="text-gray-500 text-sm dark:text-gray-400">Click to reveal answer</p>
-                  </div>
-                </div>
-
-                {/* Back of card */}
-                <div 
-                  className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-xl shadow-lg p-8 flex flex-col justify-center"
-                  style={{ 
-                    backfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)'
-                  }}
-                >
-                  <div className="text-center">
-                    <div className="text-sm text-purple-200 font-medium mb-2">BACK</div>
-                    <p className="text-lg leading-relaxed">{currentCard.back}</p>
-                  </div>
                 </div>
               </div>
-            </div>
+
+              {/* Back of card */}
+              <div 
+                  className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-xl shadow-lg p-8 flex flex-col justify-center"
+                style={{ 
+                  backfaceVisibility: 'hidden',
+                  transform: 'rotateY(180deg)'
+                }}
+              >
+                <div className="text-center">
+                  <div className="text-sm text-purple-200 font-medium mb-2">BACK</div>
+                  <p className="text-lg leading-relaxed">{currentCard.back}</p>
+                </div>
+              </div>
+              </div>
+              </div>
 
             {/* Navigation Controls - ALWAYS VISIBLE */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <div className="flex justify-between items-center mb-6">
-                <button
-                  onClick={previousCard}
-                  disabled={currentCardIndex === 0}
+              <button
+                onClick={previousCard}
+                disabled={currentCardIndex === 0}
                   className="flex items-center gap-2 px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-                >
+              >
                   <ChevronLeft className="h-5 w-5" />
-                  Previous
-                </button>
+                Previous
+              </button>
 
                 <div className="text-center">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     {isFlipped ? 'Rate your understanding' : 'Click card to reveal answer'}
                   </div>
-                </div>
+              </div>
 
-                <button
-                  onClick={nextCard}
+              <button
+                onClick={nextCard}
                   className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all duration-200 font-medium"
-                >
+              >
                   {currentCardIndex === cards.length - 1 ? 'Finish' : 'Next'}
                   <ChevronRight className="h-5 w-5" />
-                </button>
-              </div>
+              </button>
+            </div>
 
               {/* Difficulty Rating - ALWAYS VISIBLE when flipped */}
               {isFlipped && (
@@ -630,27 +978,27 @@ const FlashcardsSection = () => {
                     How well did you know this?
                   </p>
                   <div className="grid grid-cols-3 gap-4">
-                    <button
-                      onClick={() => markCard('easy')}
+                  <button
+                    onClick={() => markCard('easy')}
                       className="flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all duration-200 font-medium"
-                    >
+                  >
                       <CheckCircle className="h-5 w-5" />
-                      Easy
-                    </button>
-                    <button
-                      onClick={() => markCard('medium')}
+                    Easy
+                  </button>
+                  <button
+                    onClick={() => markCard('medium')}
                       className="flex items-center justify-center gap-2 px-4 py-3 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-all duration-200 font-medium"
-                    >
+                  >
                       <Star className="h-5 w-5" />
-                      Medium
-                    </button>
-                    <button
-                      onClick={() => markCard('hard')}
+                    Medium
+                  </button>
+                  <button
+                    onClick={() => markCard('hard')}
                       className="flex items-center justify-center gap-2 px-4 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all duration-200 font-medium"
-                    >
+                  >
                       <XCircle className="h-5 w-5" />
-                      Hard
-                    </button>
+                    Hard
+                  </button>
                   </div>
                 </div>
               )}
@@ -663,7 +1011,7 @@ const FlashcardsSection = () => {
 
   // Home screen
   return (
-    <div className="h-full bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 p-6">
+    <div className="h-full bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 p-6 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -713,9 +1061,9 @@ const FlashcardsSection = () => {
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
           <motion.div
             initial={{ scale: 0 }}
@@ -727,55 +1075,103 @@ const FlashcardsSection = () => {
           </motion.div>
           
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Study Flashcards
+            Flashcard Library
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-8">
-            Review and memorize key concepts with our interactive flashcard system.
+            {userFlashnotes.length > 0 ? 
+              'Choose from your previously generated flashcards or ask the AI to create new ones!' :
+              'No flashcards available yet. Ask the AI assistant to generate flashcards for you based on any topic!'
+            }
           </p>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-              <Target className="h-8 w-8 text-purple-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                {aiFlashnotesData ? aiFlashnotesData.length : 0} Cards
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {aiFlashnotesData ? 'AI Generated Notes' : 'No cards available'}
-              </p>
-            </div>
-            
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-              <Clock className="h-8 w-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
-                ~{aiFlashnotesData ? Math.ceil(aiFlashnotesData.length * 0.5) : 0} Minutes
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Estimated study time</p>
-            </div>
-            
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-              <Trophy className="h-8 w-8 text-yellow-600 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Self-Paced</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Study at your own speed</p>
-            </div>
-          </div>
+          {/* Loading State */}
+          {loadingFlashnotes && (
+            <div className="text-center py-8 mb-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+              <p className="mt-2 text-gray-600 dark:text-gray-300">Loading your flashcards...</p>
+        </div>
+          )}
 
+          {/* User Flashnotes Grid */}
+          {!loadingFlashnotes && userFlashnotes.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {userFlashnotes.map((flashnote) => (
+                <motion.div
+                  key={flashnote.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="group bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-200 cursor-pointer relative"
+                  onClick={() => startSavedFlashnotes(flashnote)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                      <BookOpen className="h-6 w-6 text-white" />
+      </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date(flashnote.created_at).toLocaleDateString()}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteFlashnote(flashnote.id, flashnote.name)
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200"
+                        title="Delete flashnote"
+                        aria-label={`Delete flashnote: ${flashnote.name}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                    {flashnote.name}
+                  </h3>
+                  
+                  <div className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                    {flashnote.content?.flashcards?.length || 0} cards • Mixed difficulty
+                  </div>
+                  
+                  <button 
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center justify-center"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      startSavedFlashnotes(flashnote)
+                    }}
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    Start Study Session
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+          )}
 
-
-          <button
-            onClick={() => {
-              if (aiFlashnotesData && aiFlashnotesData.length > 0) {
-                startAiFlashcards()
-              } else {
-                console.log('No flashcards available to study')
-              }
-            }}
-            disabled={!aiFlashnotesData || aiFlashnotesData.length === 0}
-            className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-8 py-4 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-200 flex items-center mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Play className="h-6 w-6 mr-3" />
-            {aiFlashnotesData && aiFlashnotesData.length > 0 ? 'Start Study Session' : 'No Cards Available'}
-          </button>
+          {/* Empty State - Show when no flashnotes */}
+          {!loadingFlashnotes && userFlashnotes.length === 0 && (
+            <div className="text-center py-8 mb-8">
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 shadow-lg border border-gray-200 dark:border-gray-700 max-w-md mx-auto">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  How to get started:
+                </h3>
+                <div className="text-left space-y-3 text-gray-600 dark:text-gray-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">1</div>
+                    <span>Go to the Chat tab</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">2</div>
+                    <span>Ask about any topic you want to study</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">3</div>
+                    <span>Request flashcards to memorize key concepts</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
 
 
@@ -794,9 +1190,9 @@ const FlashcardsSection = () => {
             </div>
           )}
         </motion.div>
-      </div>
-    )
-  }
+    </div>
+  )
+}
 
 
 

@@ -7,6 +7,9 @@ from routes.processing import router as processing_router
 from routes.llm import router as llm_router
 from Database.connection import db
 from routes.handle_session import router as handle_session_router
+from routes.study_sessions import router as study_sessions_router
+from routes.session_results import router as session_results_router
+from routes.user_profile import router as user_profile_router
 
 app = FastAPI(
     title="PDF & YouTube Knowledge Base API",
@@ -48,3 +51,6 @@ app.include_router(ingestion_router, tags=["Content Ingestion"])
 app.include_router(processing_router, tags=["Text Processing"])
 app.include_router(llm_router, tags=["LLM Queries"])
 app.include_router(handle_session_router, tags=["Session Management"])
+app.include_router(study_sessions_router, tags=["Study Sessions"])
+app.include_router(session_results_router, tags=["Session Results"])
+app.include_router(user_profile_router, tags=["User Profile"])

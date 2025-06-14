@@ -28,6 +28,7 @@ export const ACTION_TYPES = {
   UPDATE_SESSION: 'UPDATE_SESSION',
   DELETE_SESSION: 'DELETE_SESSION',
   SET_CURRENT_SESSION: 'SET_CURRENT_SESSION',
+  UPDATE_SESSION_MESSAGES: 'UPDATE_SESSION_MESSAGES',
   SET_ACTIVE_TAB: 'SET_ACTIVE_TAB',
   TOGGLE_SIDEBAR: 'TOGGLE_SIDEBAR',
   TOGGLE_DARK_MODE: 'TOGGLE_DARK_MODE',
@@ -98,6 +99,32 @@ const appReducer = (state, action) => {
     
     case ACTION_TYPES.SET_CURRENT_SESSION:
       return { ...state, currentSession: action.payload }
+    
+    case ACTION_TYPES.UPDATE_SESSION_MESSAGES:
+      const { sessionId, messages } = action.payload
+      const messageCount = messages.filter(m => m.role === 'user').length
+      
+      const updatedSessions = state.sessions.map(session => {
+        if (session.id === sessionId) {
+          return {
+            ...session,
+            messages,
+            messageCount
+          }
+        }
+        return session
+      })
+      
+      // Update current session if it's the one we updated
+      const updatedCurrentSession = state.currentSession?.id === sessionId 
+        ? updatedSessions.find(s => s.id === sessionId)
+        : state.currentSession
+      
+      return {
+        ...state,
+        sessions: updatedSessions,
+        currentSession: updatedCurrentSession
+      }
     
     case ACTION_TYPES.SET_ACTIVE_TAB:
       return { ...state, activeTab: action.payload }
@@ -337,24 +364,212 @@ export const AppProvider = ({ children }) => {
       }
     },
     
-    deleteSession: (sessionId) => {
-      dispatch({ type: ACTION_TYPES.DELETE_SESSION, payload: sessionId })
-      
-      // Update localStorage
-      const filteredSessions = state.sessions.filter(s => s.id !== sessionId)
-      localStorage.setItem('chatSessions', JSON.stringify(filteredSessions))
-      
-      if (state.currentSession?.id === sessionId) {
-        const newCurrentSession = filteredSessions.length > 0 ? filteredSessions[0] : null
-        localStorage.setItem('currentSession', JSON.stringify(newCurrentSession))
+    deleteSession: async (sessionId) => {
+      try {
+        // Call backend API to delete session
+        await apiService.deleteSession(sessionId)
+        
+        dispatch({ type: ACTION_TYPES.DELETE_SESSION, payload: sessionId })
+        
+        // Update localStorage
+        const filteredSessions = state.sessions.filter(s => s.id !== sessionId)
+        localStorage.setItem('chatSessions', JSON.stringify(filteredSessions))
+        
+        if (state.currentSession?.id === sessionId) {
+          const newCurrentSession = filteredSessions.length > 0 ? filteredSessions[0] : null
+          dispatch({ type: ACTION_TYPES.SET_CURRENT_SESSION, payload: newCurrentSession })
+          localStorage.setItem('currentSession', JSON.stringify(newCurrentSession))
+          
+          // Load messages for the new current session if it exists
+          if (newCurrentSession && newCurrentSession.id) {
+            try {
+              await actions.loadSessionMessages(newCurrentSession.id)
+            } catch (error) {
+              console.error('Failed to load messages for new current session:', error)
+            }
+          }
+        }
+        
+        toast.success('Chat session deleted')
+      } catch (error) {
+        console.error('Failed to delete session:', error)
+        dispatch({ type: ACTION_TYPES.SET_ERROR, payload: error.message })
+        toast.error('Failed to delete session')
+        throw error
       }
-      
-      toast.success('Session deleted')
     },
     
-    setCurrentSession: (session) => {
+    loadSessions: async () => {
+      try {
+        if (!state.user?.user_id) {
+          console.log('❌ No user ID available, skipping session load')
+          console.log('🔍 Current user state:', state.user)
+          return
+        }
+
+        console.log('🔄 Loading sessions from database for user:', state.user.user_id)
+        console.log('👤 User object:', state.user)
+        
+        const dbSessions = await apiService.getUserSessions(state.user.user_id)
+        console.log('📥 Raw database sessions received:', dbSessions)
+        console.log('📊 Database sessions count:', dbSessions?.length || 0)
+        
+        if (!dbSessions || !Array.isArray(dbSessions)) {
+          console.error('❌ Invalid sessions data received:', dbSessions)
+          return
+        }
+        
+        // Transform database sessions to match frontend format
+        const transformedSessions = dbSessions.map((dbSession, index) => {
+          console.log(`🔄 Transforming session ${index + 1}:`, dbSession)
+          
+          const transformed = {
+            id: dbSession.session_id,
+            title: dbSession.title || dbSession.topic || 'New Chat',
+            messages: [], // Messages will be loaded when session is selected
+            messageCount: 0, // Will be updated when messages are loaded
+            createdAt: dbSession.created_at,
+            lastActivity: dbSession.created_at,
+            type: 'chat'
+          }
+          
+          console.log(`✅ Transformed session ${index + 1}:`, transformed)
+          return transformed
+        })
+
+        console.log('✅ All transformed sessions:', transformedSessions)
+        console.log('📊 Transformed sessions count:', transformedSessions.length)
+        
+        dispatch({ type: ACTION_TYPES.SET_SESSIONS, payload: transformedSessions })
+        console.log('📝 Sessions dispatched to state')
+        
+        // Update localStorage with fresh data
+        localStorage.setItem('chatSessions', JSON.stringify(transformedSessions))
+        console.log('💾 Sessions saved to localStorage')
+        
+        // If no current session is set and we have sessions, set the first one
+        if (!state.currentSession && transformedSessions.length > 0) {
+          console.log('🎯 Setting first session as current')
+          const firstSession = transformedSessions[0]
+          dispatch({ type: ACTION_TYPES.SET_CURRENT_SESSION, payload: firstSession })
+          localStorage.setItem('currentSession', JSON.stringify(firstSession))
+          
+          // Load messages for the first session
+          if (firstSession.id) {
+            try {
+              console.log('💬 Loading messages for first session:', firstSession.id)
+              await actions.loadSessionMessages(firstSession.id)
+            } catch (error) {
+              console.error('Failed to load messages for first session:', error)
+            }
+          }
+        } else {
+          console.log('ℹ️ Current session already set or no sessions available')
+          console.log('   Current session:', state.currentSession?.id)
+          console.log('   Sessions available:', transformedSessions.length)
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to load sessions from database:', error)
+        console.error('❌ Error stack:', error.stack)
+        
+        // Fall back to localStorage if database fetch fails
+        const savedSessions = localStorage.getItem('chatSessions')
+        if (savedSessions) {
+          console.log('🔄 Falling back to localStorage sessions')
+          const parsedSessions = JSON.parse(savedSessions)
+          console.log('📥 localStorage sessions:', parsedSessions)
+          dispatch({ type: ACTION_TYPES.SET_SESSIONS, payload: parsedSessions })
+        } else {
+          console.log('❌ No localStorage sessions available either')
+        }
+      }
+    },
+    
+    loadSessionMessages: async (sessionId) => {
+      try {
+        if (!sessionId || sessionId === 'undefined') {
+          console.error('❌ Invalid session ID provided:', sessionId)
+          return []
+        }
+        
+        console.log('💬 Loading messages for session:', sessionId)
+        const messages = await apiService.getSessionMessages(sessionId)
+        
+        const transformedMessages = messages.map(msg => ({
+          id: msg.id || `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
+        }))
+
+        // Update the session with messages
+        dispatch({ 
+          type: ACTION_TYPES.UPDATE_SESSION_MESSAGES, 
+          payload: { sessionId, messages: transformedMessages } 
+        })
+        
+        // Update localStorage with the updated sessions
+        // We need to get the updated state, so we'll do this in a setTimeout to ensure state is updated
+        setTimeout(() => {
+          const currentSessions = JSON.parse(localStorage.getItem('chatSessions') || '[]')
+          const updatedSessions = currentSessions.map(session => {
+            if (session.id === sessionId) {
+              const messageCount = transformedMessages.filter(m => m.role === 'user').length
+              return {
+                ...session,
+                messages: transformedMessages,
+                messageCount
+              }
+            }
+            return session
+          })
+          localStorage.setItem('chatSessions', JSON.stringify(updatedSessions))
+          
+          // Update current session in localStorage if needed
+          if (state.currentSession?.id === sessionId) {
+            const updatedCurrentSession = updatedSessions.find(s => s.id === sessionId)
+            if (updatedCurrentSession) {
+              localStorage.setItem('currentSession', JSON.stringify(updatedCurrentSession))
+            }
+          }
+        }, 0)
+        
+        console.log('✅ Messages loaded successfully for session:', sessionId)
+        return transformedMessages
+      } catch (error) {
+        console.error('Failed to load session messages:', error)
+        throw error
+      }
+    },
+    
+    setCurrentSession: async (session) => {
+      console.log('🎯 Setting current session:', session?.id, session?.title)
+      
+      if (!session) {
+        console.log('⚠️ Attempting to set null/undefined session as current')
+        dispatch({ type: ACTION_TYPES.SET_CURRENT_SESSION, payload: null })
+        localStorage.removeItem('currentSession')
+        return
+      }
+      
+      if (!session.id) {
+        console.error('❌ Session missing ID:', session)
+        return
+      }
+      
       dispatch({ type: ACTION_TYPES.SET_CURRENT_SESSION, payload: session })
       localStorage.setItem('currentSession', JSON.stringify(session))
+      
+      // Load messages for the session if they haven't been loaded yet
+      if (!session.messages || session.messages.length === 0) {
+        try {
+          console.log('🔄 Loading messages for session:', session.id)
+          await actions.loadSessionMessages(session.id)
+        } catch (error) {
+          console.error('Failed to load messages for selected session:', error)
+        }
+      }
     },
     
     setActiveTab: (tab) => {
@@ -411,19 +626,9 @@ export const AppProvider = ({ children }) => {
         await actions.checkAuth()
         
         // Load other data from localStorage
-        const savedSessions = localStorage.getItem('chatSessions')
-        const savedCurrentSession = localStorage.getItem('currentSession')
         const savedActiveTab = localStorage.getItem('activeTab')
         const savedSidebarState = localStorage.getItem('sidebarCollapsed')
         const savedDarkMode = localStorage.getItem('darkMode')
-
-        if (savedSessions) {
-          dispatch({ type: ACTION_TYPES.SET_SESSIONS, payload: JSON.parse(savedSessions) })
-        }
-
-        if (savedCurrentSession) {
-          dispatch({ type: ACTION_TYPES.SET_CURRENT_SESSION, payload: JSON.parse(savedCurrentSession) })
-        }
 
         if (savedActiveTab) {
           dispatch({ type: ACTION_TYPES.SET_ACTIVE_TAB, payload: savedActiveTab })
@@ -454,6 +659,28 @@ export const AppProvider = ({ children }) => {
 
     initializeApp()
   }, [])
+
+  // Load sessions from database when user is authenticated
+  useEffect(() => {
+    console.log('🔍 useEffect triggered for session loading')
+    console.log('   isAuthenticated:', state.isAuthenticated)
+    console.log('   user:', state.user)
+    console.log('   user_id:', state.user?.user_id)
+    
+    if (state.isAuthenticated && state.user?.user_id) {
+      console.log('✅ User authenticated, loading sessions from database')
+      console.log('👤 User details:', {
+        user_id: state.user.user_id,
+        email: state.user.email,
+        full_name: state.user.full_name
+      })
+      actions.loadSessions()
+    } else {
+      console.log('❌ Not loading sessions - conditions not met')
+      console.log('   Missing authentication:', !state.isAuthenticated)
+      console.log('   Missing user_id:', !state.user?.user_id)
+    }
+  }, [state.isAuthenticated, state.user?.user_id])
 
   const value = {
     ...state,

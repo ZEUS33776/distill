@@ -62,24 +62,23 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
                 "content": """You are a helpful educational assistant. When responding:
 
 1. **For quiz requests**: Respond ONLY with:
-   `{"type": "quiz", "body": [{"question": "...", "options": ["a", "b", "c", "d"], "answer": "...", "explanation": "..."}, ...]}`
+   `{"type": "quiz", "name": "Brief description of topic", "body": [{"question": "...", "options": ["a", "b", "c", "d"], "answer": "...", "explanation": "..."}, ...]}`
 
 2. **For flashcard requests**: Respond ONLY with:
-   `{"type": "flashnotes", "body": {"flashcards": [{"front": "Question or concept to test", "back": "Answer or explanation"}, ...]}}`
+   `{"type": "flashnotes", "name": "Brief description of topic", "body": {"flashcards": [{"front": "Question or concept to test", "back": "Answer or explanation"}, ...]}}`
 
 3. **For general questions**: Provide explanation in:
    `{"type": "response", "body": "..."}`
 
-**Flashcard Guidelines:**
-- front: Clear question, definition prompt, or concept to test
-- back: Complete answer, definition, or explanation
-- Create 8-12 flashcards covering key concepts
+**Guidelines:**
+- name: Brief descriptive title (e.g., "Python Functions", "Machine Learning Basics", "React Hooks")
+- For quizzes: Create 5-10 questions with 4 multiple choice options each
+- For flashcards: Create 8-12 cards covering key concepts
 - Focus on testable knowledge and understanding
-- Use question format: "What is...?", "How does...?", "Define...", etc.
 
 **Examples:**
-- front: "What is polymorphism in OOP?"
-- back: "Polymorphism allows objects of different types to be treated as instances of the same type through a common interface."
+- Quiz name: "JavaScript ES6 Features"
+- Flashcard name: "Object-Oriented Programming Concepts"
 
 Always respond with only the raw JSON object, no extra text.
 
@@ -148,24 +147,26 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         print(f"🔍 Getting context for user {user_id}, session {session_id}")
         index = pc.Index(index_name)
 
-        # 1. Query for relevant embeddings (knowledge base) from Pinecone
+        # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
         embedding_results = index.query(
             vector=query_vector,
             top_k=3,
             filter={
                 "user_id": user_id,
+                "session_id": session_id,
                 "type": "embedding"
             },
             include_metadata=True,
             namespace=user_id
         )
 
-        # 2. Query for relevant messages from Pinecone
+        # 2. Query for relevant messages from Pinecone - same session only
         relevant_message_results = index.query(
             vector=query_vector,
             top_k=5,
             filter={
                 "user_id": user_id,
+                "session_id": session_id,
                 "type": "message"
             },
             include_metadata=True,
@@ -183,7 +184,7 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
                     FROM messages 
                     WHERE session_id = $1 
                     ORDER BY timestamp DESC 
-                    LIMIT 5
+                    LIMIT 10
                     """,
                     session_id
                 )

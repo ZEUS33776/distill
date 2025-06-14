@@ -6,7 +6,6 @@ import {
   MessageCircle, 
   BookOpen, 
   Zap, 
-  Settings,
   User,
   Plus,
   ChevronLeft,
@@ -71,11 +70,6 @@ const Sidebar = () => {
 
   const bottomNavigation = [
     {
-      name: 'Settings',
-      path: '/dashboard/settings',
-      icon: Settings,
-    },
-    {
       name: 'Profile',
       path: '/dashboard/profile',
       icon: User,
@@ -117,6 +111,19 @@ const Sidebar = () => {
       } catch (error) {
         // Error is already handled in the AppContext
         console.error('Failed to rename session:', error)
+      }
+    }
+  }
+
+  const handleDeleteClick = async (e, session) => {
+    e.stopPropagation() // Prevent session selection when clicking delete
+    
+    if (window.confirm(`Are you sure you want to delete "${session.title}"? This action cannot be undone.`)) {
+      try {
+        await deleteSession(session.id)
+      } catch (error) {
+        // Error is already handled in the AppContext
+        console.error('Failed to delete session:', error)
       }
     }
   }
@@ -258,14 +265,24 @@ const Sidebar = () => {
                             <span>{formatRelativeTime(session.lastActivity)}</span>
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => handleEditClick(e, session)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
-                          title="Rename session"
-                          aria-label={`Rename session: ${session.title}`}
-                        >
-                          <Pencil className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                        </button>
+                        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                          <button
+                            onClick={(e) => handleEditClick(e, session)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200"
+                            title="Rename session"
+                            aria-label={`Rename session: ${session.title}`}
+                          >
+                            <Pencil className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteClick(e, session)}
+                            className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200"
+                            title="Delete session"
+                            aria-label={`Delete session: ${session.title}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500 dark:text-red-400" />
+                          </button>
+                        </div>
                       </div>
                     </motion.div>
                   ))}

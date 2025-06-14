@@ -174,20 +174,63 @@ class ApiService {
   }
 
   // Session management
-  async createSession(userId, topic = 'New chat') {
-    console.log('📝 Creating new session for user:', userId, 'with topic:', topic);
+  async createSession(userId, title = 'New Chat') {
+    console.log('📝 Creating new session for user:', userId, 'with title:', title);
     try {
       const result = await this.request('/create_session', {
         method: 'POST',
         body: JSON.stringify({
           user_id: userId,
-          topic: topic
+          title: title,
+          topic: title  // Use title as topic for now
         })
       });
       console.log('✅ Session created successfully:', result);
       return result;
     } catch (error) {
       console.error('❌ Session creation failed:', error);
+      throw error;
+    }
+  }
+
+  async getUserSessions(userId) {
+    console.log('📋 Fetching sessions for user:', userId);
+    console.log('🔗 Request URL:', `${this.baseURL}/user/${userId}/sessions`);
+    console.log('🔑 Auth token present:', !!this.getToken());
+    
+    try {
+      const result = await this.request(`/user/${userId}/sessions`, {
+        method: 'GET'
+      });
+      console.log('✅ Sessions fetched successfully. Count:', result?.length || 0);
+      console.log('📊 Session data:', result);
+      
+      if (!result || result.length === 0) {
+        console.warn('⚠️ No sessions returned from API');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Session fetching failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.status,
+        response: error.response
+      });
+      throw error;
+    }
+  }
+
+  async getSessionMessages(sessionId) {
+    console.log('💬 Fetching messages for session:', sessionId);
+    try {
+      const result = await this.request(`/session/${sessionId}/messages`, {
+        method: 'GET'
+      });
+      console.log('✅ Messages fetched successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Message fetching failed:', error);
       throw error;
     }
   }
@@ -206,6 +249,37 @@ class ApiService {
       return result;
     } catch (error) {
       console.error('❌ Session topic update failed:', error);
+      throw error;
+    }
+  }
+
+  async deleteSession(sessionId) {
+    console.log('🗑️ Deleting session:', sessionId);
+    try {
+      const result = await this.request('/delete_session', {
+        method: 'DELETE',
+        body: JSON.stringify({
+          session_id: sessionId
+        })
+      });
+      console.log('✅ Session deleted successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Session deletion failed:', error);
+      throw error;
+    }
+  }
+
+  async deleteStudySession(studySessionId) {
+    console.log('🗑️ Deleting study session:', studySessionId);
+    try {
+      const result = await this.request(`/study-sessions/${studySessionId}`, {
+        method: 'DELETE'
+      });
+      console.log('✅ Study session deleted successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Study session deletion failed:', error);
       throw error;
     }
   }

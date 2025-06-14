@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -19,7 +19,7 @@ import { useAI } from '../../../hooks/useAI'
 import { formatTime, copyToClipboard, generateId } from '../../../utils'
 import apiService from '../../../services/api'
 
-// Function to render markdown-style text with bold formatting
+// Function to render markdown-style text with bold formatting (returns JSX)
 const renderMarkdownText = (text) => {
   if (typeof text !== 'string') return text
   
@@ -43,6 +43,14 @@ const renderMarkdownText = (text) => {
   })
 }
 
+// Function to format text as plain string (no JSX)
+const formatTextAsString = (text) => {
+  if (typeof text !== 'string') return String(text)
+  
+  // Remove markdown formatting for plain text
+  return text.replace(/\*\*(.*?)\*\*/g, '$1')
+}
+
 // Memoized MessageBubble component
 const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading }) => {
   const isUser = message.role === 'user'
@@ -56,62 +64,75 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
     // If it's a string, check if it's JSON that needs parsing
     if (typeof content === 'string') {
       // Try to parse if it looks like JSON
-      if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+      if (content.trim().startsWith('{') && content.trim().includes('"type"')) {
         try {
-          // Use a more robust approach to extract the body from malformed JSON
-          console.log('Attempting to extract body from JSON-like string')
-          
-          // Look for the "body": " pattern and extract everything until the closing quote
-          // Use a more robust regex that properly handles escaped quotes
-          const bodyMatch = content.match(/"body":\s*"((?:[^"\\]|\\.)*)"/s)
-          if (bodyMatch && bodyMatch[1]) {
-            console.log('Successfully extracted body using regex:', bodyMatch[1].substring(0, 100) + '...')
-            // Unescape the extracted content
-            const unescapedContent = bodyMatch[1]
-              .replace(/\\n/g, '\n')
-              .replace(/\\r/g, '\r')
-              .replace(/\\t/g, '\t')
-              .replace(/\\"/g, '"')
-              .replace(/\\\\/g, '\\')
-            return renderMarkdownText(unescapedContent)
-          }
-          
-          // Fallback to standard JSON parsing
+          console.log('Attempting to parse JSON string')
           const parsed = JSON.parse(content)
-          console.log('Parsed JSON from string:', parsed)
-          if (parsed && typeof parsed === 'object' && parsed.type && parsed.body) {
-            console.log('Extracting body from parsed JSON:', parsed.body)
-            return renderMarkdownText(parsed.body)
+          console.log('Successfully parsed JSON:', parsed)
+          
+          // Handle quiz objects
+          if (parsed.type === 'quiz') {
+            console.log('Detected quiz in JSON string')
+            return `Quiz: ${parsed.body?.length || 0} questions`
+          }
+          // Handle flashnotes objects  
+          else if (parsed.type === 'flashnotes') {
+            console.log('Detected flashnotes in JSON string')
+            return `Flashnotes: ${parsed.body?.flashcards?.length || parsed.body?.notes?.length || parsed.body?.length || 0} notes`
+          }
+          // Handle other structured responses
+          else if (parsed.body) {
+            console.log('Extracting body from parsed JSON')
+            return formatTextAsString(String(parsed.body))
           }
         } catch (e) {
           console.log('JSON parsing failed, treating as regular string:', e.message)
+          // If JSON parsing fails, treat as regular string
         }
       }
       console.log('Returning string content as-is')
-      return renderMarkdownText(content)
+      return formatTextAsString(content)
     }
     
     // If it's an object, handle different types
     if (content && typeof content === 'object') {
       console.log('Content is object, checking type:', content.type)
+      
+      // Handle quiz objects
       if (content.type === 'quiz') {
         console.log('Formatting as quiz')
         return `Quiz: ${content.body?.length || 0} questions`
-      } else if (content.type === 'flashnotes') {
+      } 
+      // Handle flashnotes objects
+      else if (content.type === 'flashnotes') {
         console.log('Formatting as flashnotes')
-        return `Flashnotes: ${content.body?.notes?.length || 0} notes`
-              } else if (content.type === 'response' && content.body) {
-          console.log('Formatting as response, returning body:', content.body)
-          return renderMarkdownText(content.body)
-        } else if (content.body) {
-          console.log('Object has body property, returning:', content.body)
-          return renderMarkdownText(content.body)
+        return `Flashnotes: ${content.body?.flashcards?.length || content.body?.notes?.length || 0} notes`
+      } 
+      // Handle response objects
+      else if (content.type === 'response' && content.body) {
+        console.log('Formatting as response, returning body:', content.body)
+        return formatTextAsString(String(content.body))
+      } 
+      // Handle objects with body property
+      else if (content.body) {
+        console.log('Object has body property, returning:', content.body)
+        return formatTextAsString(String(content.body))
+      }
+      // Handle quiz question objects directly (the problematic case)
+      else if (content.question && content.options && content.answer) {
+        console.log('Detected quiz question object, formatting as text')
+        return `Question: ${content.question}\nOptions: ${(content.options || []).join(', ')}\nAnswer: ${content.answer}`
+      }
+      // Handle any other object
+      else {
+        console.log('Unknown object type, converting to readable format')
+        return `[Object: ${Object.keys(content).join(', ')}]`
       }
     }
     
-    console.log('Falling back to JSON string')
-    // Fallback to JSON string for unknown formats
-    return JSON.stringify(content, null, 2)
+    console.log('Falling back to string conversion')
+    // Ensure we always return a string, never an object
+    return String(content || 'Empty content')
   }
 
   return (
@@ -138,10 +159,25 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
             <div className={`inline-block p-4 rounded-2xl shadow-sm ${
               isUser
                 ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
-                : 'bg-white border border-gray-200 text-gray-900'
+                : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100'
             }`}>
               <div className="whitespace-pre-wrap leading-relaxed">
-                {formatContent(message.content)}
+                {(() => {
+                  try {
+                    const formatted = formatContent(message.content)
+                    // formatContent now returns plain strings, so we can safely render with markdown
+                    if (typeof formatted === 'string') {
+                      return renderMarkdownText(formatted)
+                    } else {
+                      // This should not happen anymore, but keep as safety net
+                      console.warn('formatContent returned non-string:', typeof formatted, formatted)
+                      return 'Error: Invalid content format'
+                    }
+                  } catch (error) {
+                    console.error('Error formatting message content:', error, message.content)
+                    return 'Error displaying message content'
+                  }
+                })()}
               </div>
               
               {/* Message metadata */}
@@ -161,11 +197,31 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
             {!isUser && (
               <div className="flex items-center space-x-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => onCopy(formatContent(message.content))}
-                  className="p-1 rounded hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    try {
+                      const formatted = formatContent(message.content)
+                      if (typeof formatted === 'object') {
+                        if (formatted === null) {
+                          onCopy('null')
+                        } else if (React.isValidElement(formatted)) {
+                          onCopy('React component')
+                        } else if (formatted.constructor && formatted.constructor.name) {
+                          onCopy(`[${formatted.constructor.name} object]`)
+                        } else {
+                          onCopy('[Object]')
+                        }
+                      } else {
+                        onCopy(formatted)
+                      }
+                    } catch (error) {
+                      console.error('Error copying message content:', error)
+                      onCopy('Error copying message content')
+                    }
+                  }}
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   title="Copy message"
                 >
-                  <Copy className="w-4 h-4 text-gray-500" />
+                  <Copy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                 </button>
               </div>
             )}
@@ -188,11 +244,11 @@ const WelcomeScreen = memo(() => (
           <Plus className="h-10 w-10 text-white" />
         </div>
         
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           Welcome to AI Chat
         </h1>
         
-        <p className="text-gray-600 text-lg mb-8 leading-relaxed">
+        <p className="text-gray-600 dark:text-gray-300 text-lg mb-8 leading-relaxed">
           Start a conversation with your AI study assistant. Ask questions about any topic,
           upload documents for analysis, or get help with your studies.
         </p>
@@ -220,17 +276,17 @@ const WelcomeScreen = memo(() => (
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 * index }}
-              className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-200"
+              className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200"
             >
               <div className="text-3xl mb-3">{feature.icon}</div>
-              <h3 className="font-semibold text-gray-900 mb-2">{feature.title}</h3>
-              <p className="text-gray-600 text-sm">{feature.description}</p>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{feature.title}</h3>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">{feature.description}</p>
             </motion.div>
           ))}
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-blue-800 text-sm">
+        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <p className="text-blue-800 dark:text-blue-300 text-sm">
             <strong>Tip:</strong> Try asking "Explain quantum physics" or "Help me study for my exam"
           </p>
         </div>
@@ -258,7 +314,36 @@ const ChatSection = () => {
   // Initialize messages from current session
   useEffect(() => {
     if (currentSession?.messages) {
-      setMessages(currentSession.messages)
+      // Clean up any problematic messages with object content and ensure all have IDs
+      const cleanedMessages = currentSession.messages.map((message, index) => {
+        let cleanedMessage = { ...message }
+        
+        // Ensure message has an ID
+        if (!cleanedMessage.id) {
+          cleanedMessage.id = `session-msg-${index}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+        
+        if (typeof message.content === 'object') {
+          console.log('🧹 Cleaning up object content in message:', message.id)
+          let cleanContent = 'Message content unavailable'
+          
+          if (message.content && message.content.question && message.content.options) {
+            // Handle quiz question objects
+            cleanContent = `Question: ${message.content.question}\nOptions: ${(message.content.options || []).join(', ')}\nAnswer: ${message.content.answer || 'N/A'}`
+          } else if (Array.isArray(message.content)) {
+            // Handle arrays
+            cleanContent = `Generated ${message.content.length} items`
+          } else if (message.content && typeof message.content === 'object') {
+            // Handle other objects
+            cleanContent = `[Generated content: ${Object.keys(message.content).join(', ')}]`
+          }
+          
+          cleanedMessage.content = cleanContent
+        }
+        
+        return cleanedMessage
+      })
+      setMessages(cleanedMessages)
     } else {
       setMessages([])
     }
@@ -294,6 +379,59 @@ const ChatSection = () => {
     }
   }, [currentSession, updateSession])
 
+  // Function to store study session in database
+  const storeStudySession = async (type, name, content, sessionId, userId) => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const url = `${apiUrl}/study-sessions/create`
+      
+      console.log(`💾 Storing ${type} study session:`, { 
+        name, 
+        sessionId, 
+        userId, 
+        url,
+        contentLength: Array.isArray(content) ? content.length : Object.keys(content).length
+      })
+      
+      const payload = {
+        session_id: sessionId,
+        user_id: userId,
+        type: type,
+        name: name,
+        content: content
+      }
+      
+      console.log('📤 Sending payload:', JSON.stringify(payload, null, 2))
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log(`📥 Response status: ${response.status} ${response.statusText}`)
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log(`✅ ${type} study session stored successfully:`, result)
+        return result
+      } else {
+        const errorText = await response.text()
+        console.error(`❌ Failed to store ${type} study session:`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        })
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error storing ${type} study session:`, error)
+      throw error
+    }
+  }
+
   // Function to handle quiz/flashnotes responses and switch tabs
   const handleSpecialResponse = useCallback((response) => {
     console.log('🔍 handleSpecialResponse called with:', response)
@@ -306,6 +444,19 @@ const ChatSection = () => {
       // Store quiz data in localStorage for the quiz component to use
       localStorage.setItem('pendingQuizData', JSON.stringify(response.body))
       console.log('💾 Quiz data stored in localStorage')
+      
+      // Store quiz in database
+      const sessionId = currentSession?.id || 'unknown'
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}')
+      const userId = userData.user_id || 'test-user-frontend'
+      const quizName = response.name || 'AI Generated Quiz'
+      
+      console.log('🔍 Quiz storage debug:', { sessionId, userData, userId, quizName })
+      
+      // Store in database (don't await to avoid blocking UI)
+      storeStudySession('quiz', quizName, response.body, sessionId, userId).catch(error => {
+        console.error('Failed to store quiz in database:', error)
+      })
       
       // Show notification and switch to quiz tab
       toast.success('🧠 Quiz generated! Taking you to the Quiz tab...', {
@@ -329,6 +480,19 @@ const ChatSection = () => {
       // Store flashnotes data in localStorage for the flashcards component to use
       localStorage.setItem('pendingFlashnotesData', JSON.stringify(response.body))
       console.log('💾 Flashnotes data stored in localStorage')
+      
+      // Store flashnotes in database
+      const sessionId = currentSession?.id || 'unknown'
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}')
+      const userId = userData.user_id || 'test-user-frontend'
+      const flashnotesName = response.name || 'AI Generated Flashcards'
+      
+      console.log('🔍 Flashnotes storage debug:', { sessionId, userData, userId, flashnotesName })
+      
+      // Store in database (don't await to avoid blocking UI)
+      storeStudySession('flashnotes', flashnotesName, response.body, sessionId, userId).catch(error => {
+        console.error('Failed to store flashnotes in database:', error)
+      })
       
       // Show notification and switch to flashcards tab
       toast.success('📚 Flashcards generated! Taking you to the Flashcards tab...', {
@@ -540,13 +704,30 @@ const ChatSection = () => {
 
       console.log('10. Final content for message:', content)
       console.log('11. Final content type:', typeof content)
+      
+      // Ensure content is always a string for message storage
+      if (typeof content === 'object') {
+        console.log('12. Content is object, converting to string representation')
+        if (content && content.question && content.options) {
+          // Handle quiz question objects
+          content = `Question: ${content.question}\nOptions: ${(content.options || []).join(', ')}\nAnswer: ${content.answer || 'N/A'}`
+        } else if (Array.isArray(content)) {
+          // Handle arrays (like quiz questions)
+          content = `Generated ${content.length} items`
+        } else {
+          // Handle other objects
+          content = `[Generated content: ${Object.keys(content).join(', ')}]`
+        }
+        console.log('12a. Converted content:', content)
+      }
+      
       console.log('=========================')
 
       // Create AI response message
       const aiMessage = {
         id: generateId(),
         role: 'assistant',
-        content: content,
+        content: String(content), // Ensure it's always a string
         type: response.type,
         timestamp: new Date().toISOString()
       }
@@ -752,22 +933,26 @@ const ChatSection = () => {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="h-full flex flex-col bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto">
           <AnimatePresence>
-            {messages.map((message, index) => (
-              <div key={message.id} className="group">
-                <MessageBubble 
-                  message={message} 
-                  index={index}
-                  onCopy={handleCopyMessage}
-                  onRegenerate={handleRegenerateResponse}
-                  aiLoading={aiLoading}
-                />
-              </div>
-            ))}
+            {messages.map((message, index) => {
+              // Ensure each message has a unique ID
+              const messageId = message.id || `fallback-${index}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+              return (
+                <div key={messageId} className="group">
+                  <MessageBubble 
+                    message={message} 
+                    index={index}
+                    onCopy={handleCopyMessage}
+                    onRegenerate={handleRegenerateResponse}
+                    aiLoading={aiLoading}
+                  />
+                </div>
+              )
+            })}
           </AnimatePresence>
 
           {/* Typing indicator */}
@@ -781,7 +966,7 @@ const ChatSection = () => {
                 <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-bold">AI</span>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 shadow-sm">
                   <div className="flex space-x-1">
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -797,13 +982,13 @@ const ChatSection = () => {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 bg-white p-6">
+      <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
         <div className="max-w-4xl mx-auto">
           {/* Upload Actions */}
           <div className="flex items-center space-x-2 mb-4">
             <button 
               onClick={() => handleFileUpload('pdf')}
-              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
             >
               <FileText className="w-4 h-4" />
               <span>Upload PDF</span>
@@ -811,7 +996,7 @@ const ChatSection = () => {
             
             <button 
               onClick={() => handleFileUpload('youtube')}
-              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
             >
               <Youtube className="w-4 h-4" />
               <span>YouTube URL</span>
@@ -826,7 +1011,7 @@ const ChatSection = () => {
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ask a question or start a conversation..."
-              className="w-full resize-none px-4 py-3 pr-12 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[50px] max-h-32"
+              className="w-full resize-none px-4 py-3 pr-12 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[50px] max-h-32"
               rows={1}
             />
             
@@ -843,7 +1028,7 @@ const ChatSection = () => {
             </button>
           </div>
 
-          <p className="text-xs text-gray-500 text-center mt-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
             Press Enter to send, Shift + Enter for new line
           </p>
         </div>
