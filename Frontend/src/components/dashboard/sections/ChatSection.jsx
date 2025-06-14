@@ -865,8 +865,17 @@ const ChatSection = () => {
 
         input.click()
       } else if (type === 'youtube') {
+        console.log('🎬 [YT-FLOW] YouTube upload initiated');
+        
         const url = prompt('Enter YouTube URL:')
-        if (!url) return
+        if (!url) {
+          console.log('🎬 [YT-FLOW] User cancelled URL input');
+          return;
+        }
+
+        console.log('🎬 [YT-FLOW] URL entered:', url);
+        console.log('🎬 [YT-FLOW] Current session:', sessionToUse.id);
+        console.log('🎬 [YT-FLOW] Current user:', userId);
 
         // Create user message
         const userMessage = {
@@ -876,16 +885,37 @@ const ChatSection = () => {
           timestamp: new Date().toISOString()
         }
 
+        console.log('🎬 [YT-FLOW] User message created:', userMessage);
+
         // Add user message to chat
         setMessages(prev => [...prev, userMessage])
+        console.log('🎬 [YT-FLOW] User message added to chat');
+
+        // Show loading indicator
+        setIsTyping(true)
+        console.log('🎬 [YT-FLOW] Loading indicator shown');
+
+        const flowStartTime = Date.now();
 
         try {
+          console.log('🎬 [YT-FLOW] Starting YouTube processing workflow...');
+          
           // Process YouTube video through backend
-          await apiService.processYouTubeVideo(url, userId, sessionToUse.id)
+          console.log('🎬 [YT-FLOW] Step 1: Processing YouTube video...');
+          const ytResult = await apiService.processYouTubeVideo(url, userId, sessionToUse.id)
+          console.log('🎬 [YT-FLOW] Step 1 completed:', ytResult);
           
           // Process content to embeddings
-          console.log('Processing embeddings for session:', sessionToUse.id, 'user:', userId)
-          await apiService.processContentToEmbeddings(userId, sessionToUse.id)
+          console.log('🎬 [YT-FLOW] Step 2: Processing embeddings...');
+          const embedResult = await apiService.processContentToEmbeddings(userId, sessionToUse.id)
+          console.log('🎬 [YT-FLOW] Step 2 completed:', embedResult);
+
+          // Hide loading indicator
+          setIsTyping(false)
+          console.log('🎬 [YT-FLOW] Loading indicator hidden');
+
+          const totalDuration = Date.now() - flowStartTime;
+          console.log('🎬 [YT-FLOW] Total processing time:', `${totalDuration}ms`);
 
           // Create AI response message
           const aiMessage = {
@@ -895,16 +925,36 @@ const ChatSection = () => {
             timestamp: new Date().toISOString()
           }
 
+          console.log('🎬 [YT-FLOW] AI response message created:', aiMessage);
+
           // Add AI message to chat
           setMessages(prev => [...prev, aiMessage])
+          console.log('🎬 [YT-FLOW] AI message added to chat');
 
           // Update session with new messages
           updateSession(sessionToUse.id, {
             messages: [...messages, userMessage, aiMessage]
           })
+          console.log('🎬 [YT-FLOW] Session updated with new messages');
+          console.log('✅ [YT-FLOW] YouTube processing workflow completed successfully!');
 
         } catch (error) {
-          console.error('Error processing YouTube URL:', error)
+          const totalDuration = Date.now() - flowStartTime;
+          console.error('❌ [YT-FLOW] YouTube processing workflow failed!');
+          console.error('❌ [YT-FLOW] Error after:', `${totalDuration}ms`);
+          console.error('❌ [YT-FLOW] Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            url: url,
+            userId: userId,
+            sessionId: sessionToUse.id
+          });
+          
+          // Hide loading indicator
+          setIsTyping(false)
+          console.log('🎬 [YT-FLOW] Loading indicator hidden (error case)');
+          
           // Add error message to chat
           const errorMessage = {
             id: generateId(),
@@ -912,7 +962,10 @@ const ChatSection = () => {
             content: `Sorry, I encountered an error while processing your YouTube URL: ${error.message}`,
             timestamp: new Date().toISOString()
           }
+          
+          console.log('🎬 [YT-FLOW] Error message created:', errorMessage);
           setMessages(prev => [...prev, errorMessage])
+          console.log('🎬 [YT-FLOW] Error message added to chat');
         }
       }
     } catch (error) {

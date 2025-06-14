@@ -314,29 +314,63 @@ class ApiService {
   }
 
   async processYouTubeVideo(url, userId, sessionId) {
-    console.log('🎥 Processing YouTube video:', url);
+    console.log('🎥 [YT-DEBUG] Starting YouTube video processing...');
+    console.log('🎥 [YT-DEBUG] URL:', url);
+    console.log('🎥 [YT-DEBUG] User ID:', userId);
+    console.log('🎥 [YT-DEBUG] Session ID:', sessionId);
+    
+    const startTime = Date.now();
+    
     try {
-      const response = await fetch(`${this.baseURL}/process_youtube_video/?url=${encodeURIComponent(url)}&user_id=${userId}&session_id=${sessionId}`, {
+      const requestUrl = `${this.baseURL}/process_youtube_video/?url=${encodeURIComponent(url)}&user_id=${userId}&session_id=${sessionId}`;
+      console.log('🎥 [YT-DEBUG] Request URL:', requestUrl);
+      console.log('🎥 [YT-DEBUG] Making API call...');
+      
+      const response = await fetch(requestUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.getToken()}`
         }
       });
 
+      console.log('🎥 [YT-DEBUG] Response status:', response.status);
+      console.log('🎥 [YT-DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        throw new Error('Failed to process YouTube video');
+        const errorText = await response.text();
+        console.error('🎥 [YT-DEBUG] Error response body:', errorText);
+        throw new Error(`Failed to process YouTube video: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log('✅ YouTube video processed successfully:', data);
+      const duration = Date.now() - startTime;
+      
+      console.log('✅ [YT-DEBUG] YouTube video processed successfully!');
+      console.log('✅ [YT-DEBUG] Processing time:', `${duration}ms`);
+      console.log('✅ [YT-DEBUG] Response data:', data);
+      console.log('✅ [YT-DEBUG] Transcript length:', data.transcript_length || 'N/A');
+      
       return data;
     } catch (error) {
-      console.error('❌ Error processing YouTube video:', error);
+      const duration = Date.now() - startTime;
+      console.error('❌ [YT-DEBUG] YouTube processing failed!');
+      console.error('❌ [YT-DEBUG] Error after:', `${duration}ms`);
+      console.error('❌ [YT-DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   }
 
   async processContentToEmbeddings(userId, sessionId) {
+    console.log('🔄 [EMBED-DEBUG] Starting content to embeddings processing...');
+    console.log('🔄 [EMBED-DEBUG] User ID:', userId);
+    console.log('🔄 [EMBED-DEBUG] Session ID:', sessionId);
+    
+    const startTime = Date.now();
+    
     try {
       const requestBody = {
         user_id: userId,
@@ -345,7 +379,8 @@ class ApiService {
         batch_size: 64
       }
       
-      console.log('Processing content to embeddings with request:', requestBody)
+      console.log('🔄 [EMBED-DEBUG] Request body:', requestBody);
+      console.log('🔄 [EMBED-DEBUG] Making embeddings API call...');
       
       const response = await fetch(`${this.baseURL}/content_to_embeddings/`, {
         method: 'POST',
@@ -355,17 +390,34 @@ class ApiService {
         body: JSON.stringify(requestBody),
       })
 
+      console.log('🔄 [EMBED-DEBUG] Response status:', response.status);
+      console.log('🔄 [EMBED-DEBUG] Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         const errorData = await response.json()
-        console.error('Backend error response:', errorData)
+        console.error('🔄 [EMBED-DEBUG] Backend error response:', errorData)
         throw new Error(errorData.detail?.[0]?.msg || 'Failed to process content to embeddings')
       }
 
       const data = await response.json()
-      console.log('Content processed to embeddings:', data)
+      const duration = Date.now() - startTime;
+      
+      console.log('✅ [EMBED-DEBUG] Content processed to embeddings successfully!');
+      console.log('✅ [EMBED-DEBUG] Processing time:', `${duration}ms`);
+      console.log('✅ [EMBED-DEBUG] Response data:', data);
+      console.log('✅ [EMBED-DEBUG] Chunks processed:', data.chunks_processed || 'N/A');
+      console.log('✅ [EMBED-DEBUG] Embeddings created:', data.embeddings_created || 'N/A');
+      
       return data
     } catch (error) {
-      console.error('❌ Error processing content to embeddings:', error)
+      const duration = Date.now() - startTime;
+      console.error('❌ [EMBED-DEBUG] Embeddings processing failed!');
+      console.error('❌ [EMBED-DEBUG] Error after:', `${duration}ms`);
+      console.error('❌ [EMBED-DEBUG] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error
     }
   }

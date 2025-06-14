@@ -110,34 +110,67 @@ def clean_vtt(url):
         return ""
 
 def process_youtube_video(url):
-    video_id = fetch_video_id(url)
+    import time
+    start_time = time.time()
+    
+    print(f"🎬 [YT-HANDLER] Starting YouTube video processing")
+    print(f"🎬 [YT-HANDLER] URL: {url}")
+    
+    try:
+        print(f"🎬 [YT-HANDLER] Step 1: Extracting video ID...")
+        video_id = fetch_video_id(url)
+        print(f"🎬 [YT-HANDLER] Video ID extracted: {video_id}")
 
-    # Step 1: Try transcript API
-    transcript = get_transcript_api(video_id)
-
-    # Step 2: Fallback to auto-caption
-    if not transcript:
-        print("🔄 Trying auto-captions...")
-        vtt_url = get_auto_caption_url(url)
-        if vtt_url:
-            print(f"📹 Found VTT URL: {vtt_url[:100]}...")
-            transcript = clean_vtt(vtt_url)
-            if not transcript:
-                print("❌ Failed to extract content from VTT")
+        # Step 1: Try transcript API
+        print(f"🎬 [YT-HANDLER] Step 2: Attempting transcript API...")
+        transcript = get_transcript_api(video_id)
+        
+        if transcript:
+            print(f"✅ [YT-HANDLER] Transcript API successful! Length: {len(transcript)} chars")
         else:
-            print("❌ No auto-captions found.")
-            transcript = ""
+            print(f"⚠️ [YT-HANDLER] Transcript API failed, trying fallback...")
 
-    # Step 3: Store in file with metadata at top
-    os.makedirs("parsed_files", exist_ok=True)
-    filename = os.path.join("parsed_files", f"{video_id}.txt")
+        # Step 2: Fallback to auto-caption
+        if not transcript:
+            print("🔄 [YT-HANDLER] Trying auto-captions...")
+            vtt_url = get_auto_caption_url(url)
+            if vtt_url:
+                print(f"📹 [YT-HANDLER] Found VTT URL: {vtt_url[:100]}...")
+                transcript = clean_vtt(vtt_url)
+                if transcript:
+                    print(f"✅ [YT-HANDLER] Auto-captions successful! Length: {len(transcript)} chars")
+                else:
+                    print("❌ [YT-HANDLER] Failed to extract content from VTT")
+            else:
+                print("❌ [YT-HANDLER] No auto-captions found.")
+                transcript = ""
 
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(f"### SOURCE: youtube\n### URL: {url}\n\n")
-        f.write(transcript)
+        # Step 3: Store in file with metadata at top
+        print(f"🎬 [YT-HANDLER] Step 3: Saving transcript to file...")
+        os.makedirs("parsed_files", exist_ok=True)
+        filename = os.path.join("parsed_files", f"{video_id}.txt")
 
-    print(f"Transcript saved to {filename}")
-    return transcript
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(f"### SOURCE: youtube\n### URL: {url}\n\n")
+            f.write(transcript)
+
+        processing_time = time.time() - start_time
+        print(f"✅ [YT-HANDLER] Transcript saved to {filename}")
+        print(f"✅ [YT-HANDLER] YouTube processing completed successfully!")
+        print(f"✅ [YT-HANDLER] Total processing time: {processing_time:.2f}s")
+        print(f"✅ [YT-HANDLER] Final transcript length: {len(transcript)} characters")
+        print(f"✅ [YT-HANDLER] First 100 chars: {transcript[:100]}...")
+        
+        return transcript
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        print(f"❌ [YT-HANDLER] YouTube processing failed!")
+        print(f"❌ [YT-HANDLER] Error after: {processing_time:.2f}s")
+        print(f"❌ [YT-HANDLER] Error type: {type(e).__name__}")
+        print(f"❌ [YT-HANDLER] Error message: {str(e)}")
+        print(f"❌ [YT-HANDLER] Error details: {repr(e)}")
+        raise
 
 # Example usage
 if __name__ == "__main__":

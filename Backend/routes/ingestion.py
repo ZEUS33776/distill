@@ -11,17 +11,54 @@ async def process_youtube_video_endpoint(url: str, user_id: str = None, session_
     """
     Endpoint to process a YouTube video URL and save the transcript to parsed_files.
     """
+    import time
+    start_time = time.time()
+    
+    print(f"🎥 [YT-BACKEND] YouTube processing request received")
+    print(f"🎥 [YT-BACKEND] URL: {url}")
+    print(f"🎥 [YT-BACKEND] User ID: {user_id}")
+    print(f"🎥 [YT-BACKEND] Session ID: {session_id}")
+    print(f"🎥 [YT-BACKEND] Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
     try:
-        transcript = process_youtube_video(url) 
-        return {
+        print(f"🎥 [YT-BACKEND] Starting transcript extraction...")
+        transcript = process_youtube_video(url)
+        
+        processing_time = time.time() - start_time
+        print(f"✅ [YT-BACKEND] Transcript extracted successfully!")
+        print(f"✅ [YT-BACKEND] Transcript length: {len(transcript)} characters")
+        print(f"✅ [YT-BACKEND] Processing time: {processing_time:.2f}s")
+        print(f"✅ [YT-BACKEND] First 200 chars: {transcript[:200]}...")
+        
+        response_data = {
             "success": True,
             "message": "YouTube video processed and saved to parsed_files",
             "transcript_length": len(transcript),
             "user_id": user_id,
-            "session_id": session_id
+            "session_id": session_id,
+            "processing_time_seconds": round(processing_time, 2)
         }
+        
+        print(f"✅ [YT-BACKEND] Sending response: {response_data}")
+        return response_data
+        
     except Exception as e:
-        return {"error": str(e)}
+        processing_time = time.time() - start_time
+        print(f"❌ [YT-BACKEND] YouTube processing failed!")
+        print(f"❌ [YT-BACKEND] Error after: {processing_time:.2f}s")
+        print(f"❌ [YT-BACKEND] Error type: {type(e).__name__}")
+        print(f"❌ [YT-BACKEND] Error message: {str(e)}")
+        print(f"❌ [YT-BACKEND] Error details: {repr(e)}")
+        
+        error_response = {
+            "success": False, 
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "processing_time_seconds": round(processing_time, 2)
+        }
+        
+        print(f"❌ [YT-BACKEND] Sending error response: {error_response}")
+        return error_response
 
 @router.post("/process_pdf/")
 async def process_pdf_endpoint(
