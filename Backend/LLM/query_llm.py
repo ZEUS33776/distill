@@ -156,7 +156,7 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
                 "content": """You are a helpful educational assistant. When responding:
 
 1. **For quiz requests**: Respond ONLY with:
-   `{"type": "quiz", "name": "Brief description of topic", "body": [{"question": "...", "options": ["a", "b", "c", "d"], "answer": "...", "explanation": "..."}, ...]}`
+   `{"type": "quiz", "name": "Brief description of topic", "body": [{"question": "...", "options": ["a", "b", "c", "d"], "correctAnswer": 0, "explanation": "..."}, ...]}`
 
 2. **For flashcard requests**: Respond ONLY with:
    `{"type": "flashnotes", "name": "Brief description of topic", "body": {"flashcards": [{"front": "Question or concept to test", "back": "Answer or explanation"}, ...]}}`
@@ -167,12 +167,25 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
 **Guidelines:**
 - name: Brief descriptive title (e.g., "Python Functions", "Machine Learning Basics", "React Hooks")
 - For quizzes: Create 5-10 questions with 4 multiple choice options each
+- **IMPORTANT**: correctAnswer must be the INDEX (0, 1, 2, or 3) of the correct option, NOT the text
 - For flashcards: Create 8-12 cards covering key concepts
 - Focus on testable knowledge and understanding
 
 **Examples:**
 - Quiz name: "JavaScript ES6 Features"
 - Flashcard name: "Object-Oriented Programming Concepts"
+
+**Quiz Example:**
+```json
+{"type": "quiz", "name": "Basic Math", "body": [
+  {
+    "question": "What is 2 + 3?",
+    "options": ["4", "5", "6", "7"],
+    "correctAnswer": 1,
+    "explanation": "The sum of 2 and 3 is 5, which is option index 1."
+  }
+]}
+```
 
 Always respond with only the raw JSON object, no extra text.
 
@@ -204,7 +217,10 @@ User Query: {query}\n\nContext: {context}"""
         assistant_response = chat_completion.choices[0].message.content
         print(f"✅ LLM response received: {len(assistant_response)} characters")
         
+        print("🔍 RAW LLM RESPONSE:")
+        print("="*80)
         print(assistant_response)
+        print("="*80)
         
         # Parse and prepare the response first
         response_to_return = None
