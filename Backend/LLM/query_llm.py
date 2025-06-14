@@ -1,7 +1,6 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
-from pinecone import Pinecone
 from Database.connection import db
 from datetime import datetime
 import uuid
@@ -11,8 +10,20 @@ import asyncio
 
 # Load environment variables
 load_dotenv()
-pinecone_api_key = os.getenv("PINECONE_API_KEY")
-pc = Pinecone(api_key=pinecone_api_key)
+
+# Try different pinecone import approaches for compatibility
+try:
+    from pinecone import Pinecone
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    pc = Pinecone(api_key=pinecone_api_key)
+    PINECONE_NEW_API = True
+except ImportError:
+    # Fallback to older API
+    import pinecone
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    pinecone.init(api_key=pinecone_api_key, environment="gcp-starter")
+    pc = pinecone
+    PINECONE_NEW_API = False
 
 async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
     """Main async LLM query function with proper database storage"""
@@ -152,7 +163,10 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         
         # Try to get context from Pinecone (with error handling)
         try:
-            index = pc.Index(index_name)
+            if PINECONE_NEW_API:
+                index = pc.Index(index_name)
+            else:
+                index = pc.Index(index_name)
 
             # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
             embedding_results = index.query(
@@ -278,7 +292,11 @@ async def store_message_async(query, user_type, session_id, user_id, index_name=
         # Store in Pinecone (sync operation) - can be slower
         pinecone_success = False
         try:
-            index = pc.Index(index_name)
+            if PINECONE_NEW_API:
+                index = pc.Index(index_name)
+            else:
+                index = pc.Index(index_name)
+            
             index.upsert(
                 vectors=[
                     {

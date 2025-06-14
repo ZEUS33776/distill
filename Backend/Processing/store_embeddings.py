@@ -1,21 +1,32 @@
 import os
 import uuid
 from dotenv import load_dotenv
-from pinecone import Pinecone
 
 # Load environment variables
 load_dotenv()
 
-pinecone_api_key = os.getenv("PINECONE_API_KEY")
-
-# Initialize Pinecone client - newer API
-pc = Pinecone(api_key=pinecone_api_key)
+# Try different pinecone import approaches for compatibility
+try:
+    from pinecone import Pinecone
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    pc = Pinecone(api_key=pinecone_api_key)
+    PINECONE_NEW_API = True
+except ImportError:
+    # Fallback to older API
+    import pinecone
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    pinecone.init(api_key=pinecone_api_key, environment="gcp-starter")
+    pc = pinecone
+    PINECONE_NEW_API = False
 
 def store_embeddings(embeddings, user_id, session_id, index_name="chatbot-index"):
     """
     Store embeddings in Pinecone index.
     """
-    index = pc.Index(index_name)
+    if PINECONE_NEW_API:
+        index = pc.Index(index_name)
+    else:
+        index = pc.Index(index_name)
     
     # Prepare vectors for upsert
     items = [
@@ -47,15 +58,27 @@ def create_index_if_not_exists(index_name="chatbot-index", dimension=1024):
     Create Pinecone index if it doesn't exist.
     Default dimension=1024 matches Cohere's embed-english-v3.0 model.
     """
-    existing_indexes = [index.name for index in pc.list_indexes()]
-    if index_name not in existing_indexes:
-        from pinecone import ServerlessSpec
-        pc.create_index(
-            name=index_name,
-            dimension=dimension,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="gcp", region="us-central1")
-        )
-        print(f"✅ Created index '{index_name}' with dimension {dimension}")
+    if PINECONE_NEW_API:
+        existing_indexes = [index.name for index in pc.list_indexes()]
+        if index_name not in existing_indexes:
+            from pinecone import ServerlessSpec
+            pc.create_index(
+                name=index_name,
+                dimension=dimension,
+                metric="cosine",
+                spec=ServerlessSpec(cloud="gcp", region="us-central1")
+            )
+            print(f"✅ Created index '{index_name}' with dimension {dimension}")
+        else:
+            print(f"ℹ️  Index '{index_name}' already exists")
     else:
-        print(f"ℹ️  Index '{index_name}' already exists")
+        # Older API
+        if index_name not in pc.list_indexes():
+            pc.create_index(
+                name=index_name,
+                dimension=dimension,
+                metric="cosine"
+            )
+            print(f"✅ Created index '{index_name}' with dimension {dimension}")
+        else:
+            print(f"ℹ️  Index '{index_name}' already exists")
