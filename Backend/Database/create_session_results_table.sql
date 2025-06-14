@@ -3,7 +3,7 @@ DROP TABLE IF EXISTS session_results;
 
 CREATE TABLE session_results (
     id SERIAL PRIMARY KEY,
-    study_session_id INTEGER NOT NULL REFERENCES study_sessions(id),
+    study_session_id VARCHAR(255) NOT NULL, -- Changed to VARCHAR to support both numeric IDs and AI-generated hashes
     user_id VARCHAR(255) NOT NULL,
     session_type VARCHAR(20) NOT NULL CHECK (session_type IN ('quiz', 'flashnotes')),
     session_name VARCHAR(255) NOT NULL,
@@ -24,4 +24,7 @@ CREATE INDEX idx_session_results_user_id ON session_results(user_id);
 CREATE INDEX idx_session_results_study_session_id ON session_results(study_session_id);
 CREATE INDEX idx_session_results_session_type ON session_results(session_type);
 CREATE INDEX idx_session_results_completed_at ON session_results(completed_at DESC);
-CREATE INDEX idx_session_results_accuracy ON session_results(accuracy_percentage DESC); 
+CREATE INDEX idx_session_results_accuracy ON session_results(accuracy_percentage DESC);
+
+-- Add a composite index for efficient quiz-specific comparisons
+CREATE INDEX idx_session_results_user_session ON session_results(user_id, study_session_id, completed_at DESC); 

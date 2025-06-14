@@ -319,12 +319,33 @@ const QuizSection = () => {
       if (selectedQuiz.id !== 'ai-generated') {
         studySessionId = String(selectedQuiz.id) // Convert to string to match backend expectation
       } else {
-        // For AI-generated quizzes, create a unique session ID based on content hash
-        // This ensures each unique quiz gets its own tracking
-        // Use a safer method to handle Unicode characters
-        const contentString = JSON.stringify(selectedQuiz.questions.map(q => q.question))
-        const quizContentHash = btoa(encodeURIComponent(contentString)).slice(0, 10)
-        studySessionId = `ai-${quizContentHash}`
+        // For AI-generated quizzes, create a consistent session ID based on quiz content
+        // This ensures the same quiz content always gets the same ID for proper comparison
+        try {
+          // Create a more stable hash by sorting questions and using consistent formatting
+          const sortedQuestions = selectedQuiz.questions
+            .map(q => ({
+              question: (q.question || '').trim(),
+              options: (q.options || []).map(opt => opt.trim()).sort(),
+              correctAnswer: q.correctAnswer || 0
+            }))
+            .sort((a, b) => a.question.localeCompare(b.question))
+          
+          const contentString = JSON.stringify(sortedQuestions)
+          // Use a more reliable hash function
+          let hash = 0
+          for (let i = 0; i < contentString.length; i++) {
+            const char = contentString.charCodeAt(i)
+            hash = ((hash << 5) - hash) + char
+            hash = hash & hash // Convert to 32-bit integer
+          }
+          const quizContentHash = Math.abs(hash).toString(36).slice(0, 10)
+          studySessionId = `ai-quiz-${quizContentHash}`
+        } catch (error) {
+          console.error('Error creating quiz hash:', error)
+          // Fallback to timestamp-based ID if hashing fails
+          studySessionId = `ai-quiz-${Date.now()}`
+        }
       }
 
       // Calculate detailed results
@@ -368,6 +389,7 @@ const QuizSection = () => {
       }
 
       console.log('💾 Storing quiz session result:', payload)
+      console.log(`🔍 Quiz tracking: "${selectedQuiz.title}" with session ID: ${studySessionId}`)
 
       // Validate payload before sending
       if (!payload.study_session_id || !payload.user_id || !payload.session_name) {
@@ -411,11 +433,13 @@ const QuizSection = () => {
   const fetchSessionComparison = async (userId, studySessionId) => {
     setLoadingResults(true)
     try {
+      console.log(`🔍 Fetching comparison for quiz session: ${studySessionId}`)
       const response = await fetch(`${import.meta.env.VITE_API_URL}/session-results/user/${userId}/session/${studySessionId}/comparison`)
       
       if (response.ok) {
         const comparisonData = await response.json()
         console.log('✅ Fetched session comparison:', comparisonData)
+        console.log(`📊 Comparison shows ${comparisonData.previous_results.length} previous attempts of this same quiz`)
         setSessionResults(comparisonData)
       } else {
         console.error('❌ Failed to fetch session comparison:', response.status)
@@ -706,11 +730,14 @@ const QuizSection = () => {
               {sessionResults && !loadingResults && (
                 <div className="mb-8">
                   <h3 className="text-xl font-semibold text-gray-900 mb-4 text-center">Performance Comparison</h3>
+                  <p className="text-sm text-gray-600 text-center mb-4">
+                    Comparing with your previous attempts of "{selectedQuiz.title}"
+                  </p>
                   
                   {sessionResults.improvement_stats.is_first_attempt ? (
                     <div className="bg-blue-50 rounded-xl p-6 text-center">
-                      <div className="text-blue-600 font-medium">🎉 First attempt at this type of quiz!</div>
-                      <div className="text-gray-600 text-sm mt-1">Keep practicing to track your improvement</div>
+                      <div className="text-blue-600 font-medium">🎉 First attempt at this specific quiz!</div>
+                      <div className="text-gray-600 text-sm mt-1">Take this quiz again to track your improvement</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -754,7 +781,9 @@ const QuizSection = () => {
                   {/* Previous Results History */}
                   {sessionResults.previous_results.length > 0 && (
                     <div className="mt-6">
-                      <h4 className="text-lg font-medium text-gray-900 mb-3">Recent Performance History</h4>
+                      <h4 className="text-lg font-medium text-gray-900 mb-3">
+                        Previous Attempts of This Quiz ({sessionResults.previous_results.length})
+                      </h4>
                       <div className="bg-gray-50 rounded-xl p-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           {sessionResults.previous_results.slice(0, 6).map((result, index) => (

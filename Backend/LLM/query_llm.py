@@ -92,21 +92,41 @@ async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
         except Exception as e:
             print(f"⚠️ User message storage failed (continuing anyway): {e}")
         
-        # Build comprehensive context
+        # Build comprehensive context with detailed logging
         context_parts = []
+        
+        # Log each context type separately
         if relevant_embeddings and relevant_embeddings.strip():
             context_parts.append(f"Knowledge Base Context: {relevant_embeddings}")
+            print(f"📚 Knowledge Base Context: {len(relevant_embeddings)} characters")
+            print(f"📚 Knowledge Base Preview: {relevant_embeddings[:200]}...")
+        else:
+            print(f"📚 Knowledge Base Context: None")
+            
         if relevant_messages and relevant_messages.strip():
             context_parts.append(f"Relevant Previous Messages: {relevant_messages}")
+            print(f"💬 Relevant Messages Context: {len(relevant_messages)} characters")
+            print(f"💬 Relevant Messages Preview: {relevant_messages[:200]}...")
+        else:
+            print(f"💬 Relevant Messages Context: None")
+            
         if recent_messages and recent_messages.strip():
             context_parts.append(f"Recent Conversation History: {recent_messages}")
+            print(f"🕒 Recent Chat History: {len(recent_messages)} characters")
+            print(f"🕒 Recent Chat Preview: {recent_messages[:200]}...")
+        else:
+            print(f"🕒 Recent Chat History: None")
         
         if context_parts:
             context = "\n\n".join(context_parts)
         else:
             context = "No specific context available. Please provide information or ask a question."
         
-        print(f"📝 Context built: {len(context)} characters")
+        print(f"📝 Total Context Summary:")
+        print(f"   - Knowledge Base: {len(relevant_embeddings) if relevant_embeddings else 0} chars")
+        print(f"   - Relevant Messages: {len(relevant_messages) if relevant_messages else 0} chars") 
+        print(f"   - Recent History: {len(recent_messages) if recent_messages else 0} chars")
+        print(f"   - Total: {len(context)} characters")
 
         # Prepare messages for LLM
         messages = [
@@ -146,6 +166,12 @@ User Query: {query}\n\nContext: {context}"""
         # Call Groq API
         client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
         print(f"🤖 Calling Groq API...")
+        
+        # Log the actual context being sent to LLM
+        print(f"🔍 LLM Context Preview (first 300 chars):")
+        print(f"   {context[:300]}...")
+        print(f"🔍 LLM System Message Length: {len(messages[0]['content'])} characters")
+        print(f"🔍 LLM User Message Length: {len(messages[1]['content'])} characters")
         
         chat_completion = client.chat.completions.create(
             messages=messages,

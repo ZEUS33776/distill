@@ -92,6 +92,8 @@ async def get_session_comparison(user_id: str, study_session_id: str):
     Get the latest result for a session along with previous results for comparison.
     """
     try:
+        print(f"🔍 Fetching comparison for user {user_id}, session {study_session_id}")
+        
         async with db.get_connection() as conn:
             # Get the latest result for this specific session
             current_result = await conn.fetchrow(
@@ -107,6 +109,8 @@ async def get_session_comparison(user_id: str, study_session_id: str):
             if not current_result:
                 raise HTTPException(status_code=404, detail="No results found for this session")
             
+            print(f"✅ Found current result for '{current_result['session_name']}'")
+            
             # Get previous results for the same specific study session and user
             previous_results = await conn.fetch(
                 """
@@ -117,6 +121,8 @@ async def get_session_comparison(user_id: str, study_session_id: str):
                 """,
                 user_id, study_session_id, current_result['id']
             )
+            
+            print(f"📊 Found {len(previous_results)} previous attempts of the same quiz")
             
             # Convert to response format
             current_result_dict = dict(current_result)
