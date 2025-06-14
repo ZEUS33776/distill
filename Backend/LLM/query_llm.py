@@ -21,7 +21,8 @@ except ImportError:
     # Fallback to older API
     import pinecone
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
-    pinecone.init(api_key=pinecone_api_key, environment="gcp-starter")
+    # Don't specify environment - let Pinecone auto-detect the correct region
+    pinecone.init(api_key=pinecone_api_key)
     pc = pinecone
     PINECONE_NEW_API = False
 
