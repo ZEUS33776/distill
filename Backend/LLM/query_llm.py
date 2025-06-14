@@ -17,6 +17,7 @@ try:
     pinecone_api_key = os.getenv("PINECONE_API_KEY")
     pc = Pinecone(api_key=pinecone_api_key)
     PINECONE_NEW_API = True
+    print(f"🔗 Using NEW Pinecone API (v{pc.__class__.__module__})")
 except ImportError:
     # Fallback to older API
     import pinecone
@@ -25,6 +26,7 @@ except ImportError:
     pinecone.init(api_key=pinecone_api_key)
     pc = pinecone
     PINECONE_NEW_API = False
+    print(f"🔗 Using OLD Pinecone API (fallback)")
 
 async def query_llm(query, user_id, session_id, index_name="chatbot-index"):
     """Main async LLM query function with proper database storage"""
@@ -164,10 +166,16 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         
         # Try to get context from Pinecone (with error handling)
         try:
+            print(f"🔍 Attempting Pinecone connection using {'NEW' if PINECONE_NEW_API else 'OLD'} API")
+            print(f"🔍 Index name: {index_name}")
+            print(f"🔍 API key length: {len(pinecone_api_key) if pinecone_api_key else 'None'}")
+            
             if PINECONE_NEW_API:
                 index = pc.Index(index_name)
+                print(f"🔍 NEW API - Index object created: {type(index)}")
             else:
                 index = pc.Index(index_name)
+                print(f"🔍 OLD API - Index object created: {type(index)}")
 
             # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
             embedding_results = index.query(
