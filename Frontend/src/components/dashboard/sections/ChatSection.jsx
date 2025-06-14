@@ -63,11 +63,23 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
     
     // If it's a string, check if it's JSON that needs parsing
     if (typeof content === 'string') {
-      // Try to parse if it looks like JSON
-      if (content.trim().startsWith('{') && content.trim().includes('"type"')) {
+      // Try to parse if it looks like JSON or has markdown formatting
+      if ((content.trim().startsWith('{') && content.trim().includes('"type"')) || 
+          (content.includes('```json') && content.includes('"type"'))) {
         try {
           console.log('Attempting to parse JSON string')
-          const parsed = JSON.parse(content)
+          
+          // Clean up markdown formatting if present
+          let cleanedContent = content
+          if (cleanedContent.includes('```json')) {
+            const jsonStart = cleanedContent.indexOf('```json') + 7
+            const jsonEnd = cleanedContent.lastIndexOf('```')
+            if (jsonStart < jsonEnd) {
+              cleanedContent = cleanedContent.substring(jsonStart, jsonEnd).trim()
+            }
+          }
+          
+          const parsed = JSON.parse(cleanedContent)
           console.log('Successfully parsed JSON:', parsed)
           
           // Handle quiz objects
@@ -560,7 +572,7 @@ const ChatSection = () => {
       console.log('4. Response.body:', rawResponse?.body)
       console.log('5. Response.body type:', typeof rawResponse?.body)
       
-      if (!rawResponse || !rawResponse.type || !rawResponse.body) {
+      if (!rawResponse || !rawResponse.body) {
         console.error('Invalid response:', rawResponse)
         throw new Error('Invalid response from LLM')
       }
@@ -571,9 +583,22 @@ const ChatSection = () => {
         console.log('6. Response body is string, attempting to parse...')
         console.log('6a. Raw body content:', rawResponse.body.substring(0, 200) + '...')
         
+        // Clean up markdown formatting if present
+        let cleanedBody = rawResponse.body
+        if (cleanedBody.startsWith('```json') && cleanedBody.endsWith('```')) {
+          cleanedBody = cleanedBody.slice(7, -3).trim()
+          console.log('6b. Removed ```json formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+        } else if (cleanedBody.startsWith('```') && cleanedBody.endsWith('```')) {
+          const firstNewline = cleanedBody.indexOf('\n')
+          if (firstNewline !== -1) {
+            cleanedBody = cleanedBody.slice(firstNewline + 1, -3).trim()
+            console.log('6c. Removed generic ``` formatting, cleaned body:', cleanedBody.substring(0, 200) + '...')
+          }
+        }
+        
         try {
           // First try to parse as a single JSON object
-          const parsedBody = JSON.parse(rawResponse.body)
+          const parsedBody = JSON.parse(cleanedBody)
           console.log('7. Successfully parsed as single JSON:', parsedBody)
           console.log('7a. Parsed body type:', parsedBody.type)
           
