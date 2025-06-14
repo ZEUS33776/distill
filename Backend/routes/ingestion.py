@@ -7,7 +7,7 @@ import tempfile
 router = APIRouter()
 
 @router.get("/process_youtube_video/")
-async def process_youtube_video_endpoint(url: str):
+async def process_youtube_video_endpoint(url: str, user_id: str = None, session_id: str = None):
     """
     Endpoint to process a YouTube video URL and save the transcript to parsed_files.
     """
@@ -16,7 +16,9 @@ async def process_youtube_video_endpoint(url: str):
         return {
             "success": True,
             "message": "YouTube video processed and saved to parsed_files",
-            "transcript_length": len(transcript)
+            "transcript_length": len(transcript),
+            "user_id": user_id,
+            "session_id": session_id
         }
     except Exception as e:
         return {"error": str(e)}

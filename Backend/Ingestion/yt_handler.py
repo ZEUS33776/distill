@@ -35,45 +35,79 @@ def get_auto_caption_url(video_url, lang='en'):
         info = ydl.extract_info(video_url, download=False)
         subs = info.get('automatic_captions', {})
         if lang in subs:
+            # Look for direct VTT URLs, avoid M3U8 playlists
             for entry in subs[lang]:
+                if entry['ext'] == 'vtt':
+                    url = entry['url']
+                    # Skip M3U8 playlist URLs
+                    if not url.startswith('#EXTM3U') and 'fmt=vtt' in url:
+                        return url
+                    # If it's a playlist, try to extract the actual VTT URL
+                    elif url.startswith('http') and 'fmt=vtt' in url:
+                        return url
+        
+        # Fallback: try manual captions if auto-captions failed
+        manual_subs = info.get('subtitles', {})
+        if lang in manual_subs:
+            for entry in manual_subs[lang]:
                 if entry['ext'] == 'vtt':
                     return entry['url']
     return None
 
 def clean_vtt(url):
-    vtt = requests.get(url).text
-    lines = vtt.splitlines()
-    filtered = []
-    last_line = ""
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        vtt_content = response.text
+        
+        # Check if we got an M3U8 playlist instead of VTT
+        if vtt_content.startswith('#EXTM3U'):
+            print("❌ Received M3U8 playlist instead of VTT content")
+            return ""
+        
+        lines = vtt_content.splitlines()
+        filtered = []
+        last_line = ""
 
-    for line in lines:
-        if '-->' in line or line.strip().isdigit() or line.startswith("WEBVTT"):
-            continue
-        line = re.sub(r"<[^>]+>", "", line).strip()
-        if line and line != last_line:
-            filtered.append(line)
-            last_line = line  # Prevent consecutive duplicates
+        for line in lines:
+            # Skip VTT headers, timestamps, and empty lines
+            if ('-->' in line or 
+                line.strip().isdigit() or 
+                line.startswith("WEBVTT") or
+                line.startswith("NOTE") or
+                not line.strip()):
+                continue
+            
+            # Remove HTML tags and clean the line
+            line = re.sub(r"<[^>]+>", "", line).strip()
+            if line and line != last_line:
+                filtered.append(line)
+                last_line = line  # Prevent consecutive duplicates
 
-    text = ' '.join(filtered)
+        text = ' '.join(filtered)
 
-    # Optional: Remove repeated trigrams or short phrase loops
-    words = text.split()
-    result = []
-    window = set()
-    i = 0
+        # Optional: Remove repeated trigrams or short phrase loops
+        words = text.split()
+        result = []
+        window = set()
+        i = 0
 
-    while i < len(words):
-        phrase = ' '.join(words[i:i+5])  # check up to 5-word repeats
-        if phrase in window:
-            i += 5
-            continue
-        result.append(words[i])
-        window.add(phrase)
-        if len(window) > 50:
-            window.pop()
-        i += 1
+        while i < len(words):
+            phrase = ' '.join(words[i:i+5])  # check up to 5-word repeats
+            if phrase in window:
+                i += 5
+                continue
+            result.append(words[i])
+            window.add(phrase)
+            if len(window) > 50:
+                window.pop()
+            i += 1
 
-    return ' '.join(result)
+        return ' '.join(result)
+    
+    except Exception as e:
+        print(f"❌ Error cleaning VTT: {e}")
+        return ""
 
 def process_youtube_video(url):
     video_id = fetch_video_id(url)
@@ -83,11 +117,15 @@ def process_youtube_video(url):
 
     # Step 2: Fallback to auto-caption
     if not transcript:
+        print("🔄 Trying auto-captions...")
         vtt_url = get_auto_caption_url(url)
         if vtt_url:
+            print(f"📹 Found VTT URL: {vtt_url[:100]}...")
             transcript = clean_vtt(vtt_url)
+            if not transcript:
+                print("❌ Failed to extract content from VTT")
         else:
-            print("No auto-captions found.")
+            print("❌ No auto-captions found.")
             transcript = ""
 
     # Step 3: Store in file with metadata at top

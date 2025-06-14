@@ -14,8 +14,8 @@ def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limi
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
-            # Extract metadata from the top of the file
-            source = url = original_filename = original_path = ""
+            # Extract metadata from the top of the file - initialize all variables
+            source = url = original_filename = original_path = user_id = ""
             content_lines = []
 
             for line in lines:
@@ -53,7 +53,7 @@ def read_and_chunk_files(folder_path="./parsed_files", chunk_size=500, char_limi
                         "text": chunk_text,
                         "source": source,
                         "type": "data",
-                        "user_id": user_id
+                        "user_id": user_id  # Now properly initialized
                     }
                     
                     # Add source-specific metadata
