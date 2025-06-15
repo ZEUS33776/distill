@@ -57,9 +57,10 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
 
   // Format the content based on its type
   const formatContent = (content) => {
-    console.log('=== FORMATTING CONTENT ===')
-    console.log('Input content:', content)
-    console.log('Input content type:', typeof content)
+    console.log('🎨 === FORMATTING CONTENT ===')
+    console.log('🎨 Input content:', content)
+    console.log('🎨 Input content type:', typeof content)
+    console.log('🎨 Content preview:', typeof content === 'string' ? content.substring(0, 100) + '...' : 'Not a string')
     
     // If it's a string, check if it's JSON that needs parsing
     if (typeof content === 'string') {
@@ -67,20 +68,20 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
       
       // Handle JSON wrapped in markdown code blocks
       if (jsonContent.startsWith('```json') && jsonContent.endsWith('```')) {
-        console.log('Detected JSON in markdown code block, extracting...')
+        console.log('🎨 ✅ Detected JSON in markdown code block, extracting...')
         jsonContent = jsonContent.slice(7, -3).trim() // Remove ```json and ```
-        console.log('Extracted JSON content:', jsonContent.substring(0, 100) + '...')
+        console.log('🎨 ✅ Extracted JSON content:', jsonContent.substring(0, 100) + '...')
       }
       // Handle JSON wrapped in generic code blocks
       else if (jsonContent.startsWith('```') && jsonContent.endsWith('```')) {
-        console.log('Detected content in generic code block, extracting...')
+        console.log('🎨 ✅ Detected content in generic code block, extracting...')
         const firstNewline = jsonContent.indexOf('\n')
         if (firstNewline !== -1) {
           jsonContent = jsonContent.slice(firstNewline + 1, -3).trim()
         } else {
           jsonContent = jsonContent.slice(3, -3).trim()
         }
-        console.log('Extracted content:', jsonContent.substring(0, 100) + '...')
+        console.log('🎨 ✅ Extracted content:', jsonContent.substring(0, 100) + '...')
       }
       
       // Try to parse if it looks like JSON
@@ -575,12 +576,13 @@ const ChatSection = () => {
 
       // Query LLM with the user's message
       const rawResponse = await apiService.queryLLM(userId, sessionToUse.id, userMessage.content)
-      console.log('=== DEBUGGING RESPONSE ===')
-      console.log('1. Raw response from apiService:', rawResponse)
-      console.log('2. Response type:', typeof rawResponse)
-      console.log('3. Response.type:', rawResponse?.type)
-      console.log('4. Response.body:', rawResponse?.body)
-      console.log('5. Response.body type:', typeof rawResponse?.body)
+      console.log('🔍 === DEBUGGING RESPONSE ===')
+      console.log('🔍 1. Raw response from apiService:', rawResponse)
+      console.log('🔍 2. Response type:', typeof rawResponse)
+      console.log('🔍 3. Response.type:', rawResponse?.type)
+      console.log('🔍 4. Response.body:', rawResponse?.body)
+      console.log('🔍 5. Response.body type:', typeof rawResponse?.body)
+      console.log('🔍 6. Response.body preview:', typeof rawResponse?.body === 'string' ? rawResponse.body.substring(0, 200) + '...' : 'Not a string')
       
       if (!rawResponse || !rawResponse.type || !rawResponse.body) {
         console.error('Invalid response:', rawResponse)
@@ -711,13 +713,21 @@ const ChatSection = () => {
       }
 
       // Check if this is a special response (quiz or flashnotes) that requires tab switching
+      console.log('🎯 === SPECIAL RESPONSE CHECK ===')
+      console.log('🎯 Response object for special handling:', response)
+      console.log('🎯 Response.type:', response?.type)
+      console.log('🎯 Response.body type:', typeof response?.body)
+      console.log('🎯 Response.body preview:', Array.isArray(response?.body) ? `Array with ${response.body.length} items` : typeof response?.body)
+      
       const isSpecialResponse = handleSpecialResponse(response)
+      console.log('🎯 handleSpecialResponse returned:', isSpecialResponse)
       
       // If it's a special response, don't add it to chat - it will be handled by the target tab
       if (isSpecialResponse) {
-        console.log('Special response handled, skipping chat message creation')
+        console.log('🎯 ✅ Special response handled, skipping chat message creation')
         return
       }
+      console.log('🎯 ❌ Not a special response, continuing with regular message creation')
 
       // For regular responses, use the response body as content
       let content = response.body
