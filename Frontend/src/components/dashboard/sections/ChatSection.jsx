@@ -593,9 +593,26 @@ const ChatSection = () => {
         console.log('6. Response body is string, attempting to parse...')
         console.log('6a. Raw body content:', rawResponse.body.substring(0, 200) + '...')
         
+        // Handle JSON wrapped in markdown code blocks first
+        let jsonContent = rawResponse.body.trim()
+        if (jsonContent.startsWith('```json') && jsonContent.endsWith('```')) {
+          console.log('6b. Detected JSON in markdown code block, extracting...')
+          jsonContent = jsonContent.slice(7, -3).trim() // Remove ```json and ```
+          console.log('6c. Extracted JSON content:', jsonContent.substring(0, 200) + '...')
+        } else if (jsonContent.startsWith('```') && jsonContent.endsWith('```')) {
+          console.log('6b. Detected content in generic code block, extracting...')
+          const firstNewline = jsonContent.indexOf('\n')
+          if (firstNewline !== -1) {
+            jsonContent = jsonContent.slice(firstNewline + 1, -3).trim()
+          } else {
+            jsonContent = jsonContent.slice(3, -3).trim()
+          }
+          console.log('6c. Extracted content:', jsonContent.substring(0, 200) + '...')
+        }
+        
         try {
           // First try to parse as a single JSON object
-          const parsedBody = JSON.parse(rawResponse.body)
+          const parsedBody = JSON.parse(jsonContent)
           console.log('7. Successfully parsed as single JSON:', parsedBody)
           console.log('7a. Parsed body type:', parsedBody.type)
           
@@ -610,24 +627,24 @@ const ChatSection = () => {
           console.log('7. Single JSON parsing failed:', singleParseError.message)
           
           // Try to handle incomplete or malformed JSON by looking for quiz pattern
-          const quizMatch = rawResponse.body.match(/"type":\s*"quiz"/)
-          const flashnotesMatch = rawResponse.body.match(/"type":\s*"flashnotes"/)
+          const quizMatch = jsonContent.match(/"type":\s*"quiz"/)
+          const flashnotesMatch = jsonContent.match(/"type":\s*"flashnotes"/)
           
           if (quizMatch || flashnotesMatch) {
             console.log('8. Found quiz/flashnotes pattern, attempting to extract JSON')
             
             // Try to find the complete JSON object starting from the type
-            const typeIndex = rawResponse.body.indexOf('"type":')
+            const typeIndex = jsonContent.indexOf('"type":')
             if (typeIndex !== -1) {
-              let jsonStart = rawResponse.body.lastIndexOf('{', typeIndex)
+              let jsonStart = jsonContent.lastIndexOf('{', typeIndex)
               if (jsonStart !== -1) {
                 // Find the matching closing brace
                 let braceCount = 0
                 let jsonEnd = -1
                 
-                for (let i = jsonStart; i < rawResponse.body.length; i++) {
-                  if (rawResponse.body[i] === '{') braceCount++
-                  else if (rawResponse.body[i] === '}') {
+                for (let i = jsonStart; i < jsonContent.length; i++) {
+                  if (jsonContent[i] === '{') braceCount++
+                  else if (jsonContent[i] === '}') {
                     braceCount--
                     if (braceCount === 0) {
                       jsonEnd = i
@@ -637,7 +654,7 @@ const ChatSection = () => {
                 }
                 
                 if (jsonEnd !== -1) {
-                  const extractedJson = rawResponse.body.substring(jsonStart, jsonEnd + 1)
+                  const extractedJson = jsonContent.substring(jsonStart, jsonEnd + 1)
                   console.log('9. Extracted JSON:', extractedJson.substring(0, 200) + '...')
                   
                   try {
@@ -658,7 +675,7 @@ const ChatSection = () => {
           if (response === rawResponse) {
             console.log('8. Trying multiple JSON objects fallback')
             try {
-              const jsonParts = rawResponse.body.split(/\}\s*\{/)
+              const jsonParts = jsonContent.split(/\}\s*\{/)
               
               if (jsonParts.length > 1) {
                 const jsonObjects = jsonParts.map((part, index) => {
