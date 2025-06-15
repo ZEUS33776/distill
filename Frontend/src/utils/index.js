@@ -22,6 +22,23 @@ export const formatRelativeTime = (date) => {
   return formatDistanceToNow(new Date(date), { addSuffix: true })
 }
 
+// Format duration in seconds to human readable format
+export const formatDuration = (seconds) => {
+  if (!seconds || seconds === 0) return '0m'
+  
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainingSeconds = Math.floor(seconds % 60)
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  } else if (minutes > 0) {
+    return `${minutes}m`
+  } else {
+    return `${remainingSeconds}s`
+  }
+}
+
 // Generate session title from message
 export const generateSessionTitle = (message) => {
   if (!message) return 'New Chat'
