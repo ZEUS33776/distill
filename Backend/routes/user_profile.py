@@ -106,13 +106,13 @@ async def check_user_exists(user_id: str) -> bool:
     try:
         async with db.get_connection() as conn:
             result = await conn.fetchval(
-                "SELECT EXISTS(SELECT 1 FROM users WHERE id::text = $1)",
+                "SELECT EXISTS(SELECT 1 FROM users WHERE user_id::text = $1)",
                 user_id
             )
             return bool(result)
     except Exception as e:
         logger.error(f"Error checking user existence: {e}")
-        return False
+        return True  # Default to True to allow processing
 
 async def get_user_stats(user_id: str) -> Dict[str, Any]:
     """Get comprehensive user statistics with accurate counts"""
@@ -280,62 +280,47 @@ async def get_recent_activity(
         async with db.get_connection() as conn:
             # Get recent activities from both session_results and chat sessions
             activity_query = """
-            (
-                SELECT 
-                    sr.id as activity_id,
-                    sr.session_type as activity_type,
-                    COALESCE(sr.session_name, 'Study Session') as title,
-                    CASE 
-                        WHEN sr.session_type = 'quiz' THEN 
-                            'Completed quiz with ' || ROUND(sr.accuracy_percentage) || '% accuracy (' || sr.total_questions || ' questions)'
-                        WHEN sr.session_type = 'flashnotes' THEN 
-                            'Studied ' || sr.total_questions || ' flashcards with ' || ROUND(sr.accuracy_percentage) || '% mastery'
-                        ELSE 'Completed study session'
-                    END as description,
-                    sr.completed_at as timestamp,
-                    sr.accuracy_percentage as score,
-                    sr.time_spent_seconds as duration,
-                    'session' as source_type
-                FROM session_results sr
-                WHERE sr.user_id::text = $1 AND sr.completed_at IS NOT NULL
-                ORDER BY sr.completed_at DESC
-                LIMIT $2
-            )
+            SELECT 
+                sr.id as activity_id,
+                sr.session_type as activity_type,
+                COALESCE(sr.session_name, 'Study Session') as title,
+                CASE 
+                    WHEN sr.session_type = 'quiz' THEN 
+                        'Completed quiz with ' || COALESCE(ROUND(sr.accuracy_percentage), 0) || '% accuracy (' || COALESCE(sr.total_questions, 0) || ' questions)'
+                    WHEN sr.session_type = 'flashnotes' THEN 
+                        'Studied ' || COALESCE(sr.total_questions, 0) || ' flashcards with ' || COALESCE(ROUND(sr.accuracy_percentage), 0) || '% mastery'
+                    ELSE 'Completed study session'
+                END as description,
+                sr.completed_at as timestamp,
+                sr.accuracy_percentage as score,
+                sr.time_spent_seconds as duration,
+                'session' as source_type
+            FROM session_results sr
+            WHERE sr.user_id::text = $1 AND sr.completed_at IS NOT NULL
+            
             UNION ALL
-            (
-                SELECT 
-                    s.session_id as activity_id,
-                    'chat' as activity_type,
-                    COALESCE(s.topic, 'AI Chat Session') as title,
-                    CASE 
-                        WHEN s.topic IS NOT NULL AND LENGTH(s.topic) > 0 
-                        THEN 'Discussed: ' || LEFT(s.topic, 100)
-                        ELSE 'Started new AI conversation'
-                    END as description,
-                    s.created_at as timestamp,
-                    NULL as score,
-                    NULL as duration,
-                    'chat' as source_type
-                FROM sessions s
-                WHERE s.user_id::text = $1 AND s.is_active = true AND s.created_at IS NOT NULL
-                ORDER BY s.created_at DESC
-                LIMIT $3
-            )
+            
+            SELECT 
+                ABS(HASHTEXT(s.session_id::text)) as activity_id,
+                'chat' as activity_type,
+                COALESCE(s.topic, 'AI Chat Session') as title,
+                CASE 
+                    WHEN s.topic IS NOT NULL AND LENGTH(s.topic) > 0 
+                    THEN 'Discussed: ' || LEFT(s.topic, 100)
+                    ELSE 'Started new AI conversation'
+                END as description,
+                s.created_at as timestamp,
+                NULL as score,
+                NULL as duration,
+                'chat' as source_type
+            FROM sessions s
+            WHERE s.user_id::text = $1 AND s.is_active = true AND s.created_at IS NOT NULL
+            
             ORDER BY timestamp DESC NULLS LAST
-            LIMIT $4
+            LIMIT $2
             """
             
-            # Calculate limits for mixed results
-            session_limit = max(limit // 2, 5)
-            chat_limit = max(limit // 2, 5)
-            
-            activities = await conn.fetch(
-                activity_query, 
-                user_id, 
-                session_limit, 
-                chat_limit, 
-                limit
-            )
+            activities = await conn.fetch(activity_query, user_id, limit)
 
             activity_items = []
             for activity in activities:
