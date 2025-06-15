@@ -128,7 +128,7 @@ class Achievement(BaseModel):
     name: str = Field(min_length=1, max_length=100, description="Achievement name")
     description: str = Field(min_length=1, max_length=200, description="Achievement description")
     icon: str = Field(min_length=1, max_length=50, description="Icon name")
-    color: str = Field(regex=r'^text-\w+-\d+$', description="Tailwind CSS color class")
+    color: str = Field(pattern=r'^text-\w+-\d+$', description="Tailwind CSS color class")
     earned_at: datetime = Field(description="When the achievement was earned")
     category: str = Field(min_length=1, max_length=50, description="Achievement category")
 
