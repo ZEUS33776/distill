@@ -273,7 +273,7 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
             # 1. Query for relevant embeddings (knowledge base) from Pinecone - same session only
             embedding_results = index.query(
                 vector=query_vector,
-                top_k=5,
+                top_k=3,
                 filter={
                     "user_id": user_id,
                     "session_id": session_id,
@@ -307,7 +307,7 @@ async def getContext(query_vector, user_id, session_id, index_name="chatbot-inde
         try:
             async with db.get_connection() as conn:
                 # Get more messages when Pinecone fails to provide better context
-                limit = 20 if not embedding_results.get("matches") else 10
+                limit = 10 if not embedding_results.get("matches") else 5
                 
                 recent_messages = await conn.fetch(
                     """
