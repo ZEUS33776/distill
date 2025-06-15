@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { User, Brain, Mail, Calendar, Award, BookOpen, Target, Zap } from 'lucide-react'
+import { User, Brain, Mail, Calendar, Award, BookOpen, Target, Zap, Star } from 'lucide-react'
 import { useApp } from '../../../contexts/AppContext'
 import Avatar from '../../common/Avatar'
 import { formatDate } from '../../../utils'
@@ -69,13 +69,17 @@ const ProfileSection = () => {
   const stats = profileData ? [
     { label: 'Chats Started', value: profileData.stats.chats_started.toString(), icon: Zap, color: 'text-blue-600' },
     { label: 'Quizzes Taken', value: profileData.stats.quizzes_taken.toString(), icon: Target, color: 'text-green-600' },
-    { label: 'Study Sessions', value: profileData.stats.study_sessions.toString(), icon: BookOpen, color: 'text-purple-600' },
-    { label: 'Achievements', value: profileData.stats.achievements.toString(), icon: Award, color: 'text-yellow-600' },
+    { label: 'Flashcards Studied', value: profileData.stats.total_flashcards_studied.toString(), icon: Brain, color: 'text-purple-600' },
+    { label: 'Study Sessions', value: profileData.stats.study_sessions.toString(), icon: BookOpen, color: 'text-indigo-600' },
+    { label: 'Best Score', value: `${Math.round(profileData.stats.best_quiz_score)}%`, icon: Award, color: 'text-yellow-600' },
+    { label: 'Achievements', value: profileData.stats.achievements.toString(), icon: Star, color: 'text-pink-600' },
   ] : [
     { label: 'Chats Started', value: '0', icon: Zap, color: 'text-blue-600' },
     { label: 'Quizzes Taken', value: '0', icon: Target, color: 'text-green-600' },
-    { label: 'Study Sessions', value: '0', icon: BookOpen, color: 'text-purple-600' },
-    { label: 'Achievements', value: '0', icon: Award, color: 'text-yellow-600' },
+    { label: 'Flashcards Studied', value: '0', icon: Brain, color: 'text-purple-600' },
+    { label: 'Study Sessions', value: '0', icon: BookOpen, color: 'text-indigo-600' },
+    { label: 'Best Score', value: '0%', icon: Award, color: 'text-yellow-600' },
+    { label: 'Achievements', value: '0', icon: Star, color: 'text-pink-600' },
   ]
 
   if (loading) {
@@ -153,22 +157,22 @@ const ProfileSection = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           {stats.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg"
+              className="bg-white dark:bg-gray-800 rounded-xl p-4 lg:p-6 shadow-lg"
             >
-              <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700`}>
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
+              <div className="flex flex-col lg:flex-row items-center lg:items-start space-y-2 lg:space-y-0 lg:space-x-3">
+                <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-700 flex-shrink-0`}>
+                  <stat.icon className={`w-4 h-4 lg:w-5 lg:h-5 ${stat.color}`} />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{stat.label}</p>
+                <div className="text-center lg:text-left">
+                  <p className="text-xl lg:text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                  <p className="text-xs lg:text-sm text-gray-600 dark:text-gray-300">{stat.label}</p>
                 </div>
               </div>
             </motion.div>

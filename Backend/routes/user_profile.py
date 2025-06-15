@@ -353,51 +353,90 @@ async def get_recent_activity(
             raise HTTPException(status_code=404, detail="User not found")
         
         async with db.get_connection() as conn:
-            # Optimized query using UNION for better performance
+            # Improved query with better error handling and data quality
             activity_query = """
-            (
+            WITH recent_sessions AS (
                 SELECT 
-                    sr.id::text as activity_id,
+                    sr.id as activity_id,
                     sr.session_type as activity_type,
-                    COALESCE(sr.session_name, ss.name, 'Study Session') as title,
+                    COALESCE(
+                        CASE 
+                            WHEN sr.session_name IS NOT NULL AND LENGTH(TRIM(sr.session_name)) > 0 
+                            THEN sr.session_name
+                            WHEN ss.name IS NOT NULL AND LENGTH(TRIM(ss.name)) > 0 
+                            THEN ss.name
+                            WHEN sr.session_type = 'quiz' THEN 'Quiz Session'
+                            WHEN sr.session_type = 'flashnotes' THEN 'Flashcard Study'
+                            ELSE 'Study Session'
+                        END
+                    ) as title,
                     CASE 
-                        WHEN sr.session_type = 'quiz' THEN 'Scored ' || ROUND(COALESCE(sr.accuracy_percentage, 0)) || '% accuracy'
-                        WHEN sr.session_type = 'flashnotes' THEN 'Studied ' || ROUND(COALESCE(sr.accuracy_percentage, 0)) || '% mastery rate'
+                        WHEN sr.session_type = 'quiz' THEN 
+                            'Scored ' || COALESCE(ROUND(sr.accuracy_percentage), 0) || '% accuracy'
+                            || CASE 
+                                WHEN sr.total_questions > 0 THEN ' on ' || sr.total_questions || ' questions'
+                                ELSE ''
+                            END
+                        WHEN sr.session_type = 'flashnotes' THEN 
+                            'Achieved ' || COALESCE(ROUND(sr.accuracy_percentage), 0) || '% mastery'
+                            || CASE 
+                                WHEN sr.total_questions > 0 THEN ' on ' || sr.total_questions || ' flashcards'
+                                ELSE ''
+                            END
                         ELSE 'Completed study session'
                     END as description,
-                    sr.completed_at as timestamp,
+                    COALESCE(sr.completed_at, sr.created_at) as timestamp,
                     sr.accuracy_percentage as score,
                     sr.time_spent_seconds as duration,
-                    'session' as source_type
+                    'session' as source_type,
+                    sr.created_at as sort_timestamp
                 FROM session_results sr
                 LEFT JOIN study_sessions ss ON sr.study_session_id::text = ss.id::text
-                WHERE sr.user_id::text = $1 AND sr.completed_at IS NOT NULL
-                ORDER BY sr.completed_at DESC
+                WHERE sr.user_id::text = $1 
+                    AND COALESCE(sr.completed_at, sr.created_at) IS NOT NULL
+                ORDER BY COALESCE(sr.completed_at, sr.created_at) DESC
                 LIMIT $2
-            )
-            UNION ALL
-            (
+            ),
+            recent_chats AS (
                 SELECT 
-                    s.session_id::text as activity_id,
+                    s.session_id as activity_id,
                     'chat' as activity_type,
-                    COALESCE(s.topic, 'Chat Session') as title,
-                    'Started new conversation' as description,
+                    COALESCE(
+                        CASE 
+                            WHEN s.topic IS NOT NULL AND LENGTH(TRIM(s.topic)) > 0 
+                            THEN TRIM(s.topic)
+                            ELSE 'AI Chat Session'
+                        END
+                    ) as title,
+                    CASE 
+                        WHEN s.topic IS NOT NULL AND LENGTH(TRIM(s.topic)) > 0 
+                        THEN 'Discussed: ' || LEFT(TRIM(s.topic), 100)
+                        ELSE 'Started new AI conversation'
+                    END as description,
                     s.created_at as timestamp,
                     NULL as score,
                     NULL as duration,
-                    'chat' as source_type
+                    'chat' as source_type,
+                    s.created_at as sort_timestamp
                 FROM sessions s
-                WHERE s.user_id::text = $1 AND s.is_active = true AND s.created_at IS NOT NULL
+                WHERE s.user_id::text = $1 
+                    AND s.is_active = true 
+                    AND s.created_at IS NOT NULL
                 ORDER BY s.created_at DESC
                 LIMIT $3
             )
-            ORDER BY timestamp DESC NULLS LAST
+            SELECT * FROM (
+                SELECT * FROM recent_sessions
+                UNION ALL
+                SELECT * FROM recent_chats
+            ) combined_activities
+            ORDER BY sort_timestamp DESC NULLS LAST
             LIMIT $4
             """
             
-            # Calculate limits for each query part
-            session_limit = max(limit // 2, 5)
-            chat_limit = max(limit // 2, 5)
+            # Calculate better limits for mixed results
+            session_limit = max(int(limit * 0.7), 5)  # 70% for sessions
+            chat_limit = max(int(limit * 0.5), 3)     # 50% for chats
             
             activities = await conn.fetch(
                 activity_query, 
@@ -408,36 +447,86 @@ async def get_recent_activity(
             )
 
             activity_items = []
+            seen_ids = set()
+            
             for activity in activities:
                 try:
-                    # Generate consistent ID
-                    activity_id = activity['activity_id']
-                    if activity['source_type'] == 'chat':
-                        activity_id = str(abs(hash(activity_id)) % 1000000)
+                    # Generate more robust ID system
+                    raw_id = str(activity['activity_id'])
+                    source_type = activity['source_type']
                     
-                    # Ensure we have a valid integer ID
-                    try:
-                        numeric_id = int(activity_id) if activity_id.isdigit() else abs(hash(activity_id)) % 1000000
-                    except (ValueError, TypeError):
-                        numeric_id = abs(hash(str(activity_id))) % 1000000
+                    # Create unique numeric ID based on source and raw_id
+                    if source_type == 'session':
+                        # For sessions, try to use raw ID if numeric, else hash
+                        if raw_id.isdigit():
+                            numeric_id = int(raw_id)
+                        else:
+                            numeric_id = abs(hash(f"session_{raw_id}")) % 999999 + 1000000
+                    else:  # chat
+                        # For chats, always hash to avoid conflicts with session IDs
+                        numeric_id = abs(hash(f"chat_{raw_id}")) % 999999 + 2000000
+                    
+                    # Ensure uniqueness
+                    while numeric_id in seen_ids:
+                        numeric_id += 1
+                    seen_ids.add(numeric_id)
+                    
+                    # Clean and validate data
+                    title = str(activity['title'] or "Activity").strip()
+                    if len(title) == 0:
+                        title = "Study Activity"
+                    elif len(title) > 200:
+                        title = title[:197] + "..."
+                    
+                    description = str(activity['description'] or "").strip()
+                    if len(description) == 0:
+                        description = "No description available"
+                    elif len(description) > 500:
+                        description = description[:497] + "..."
+                    
+                    # Validate timestamp
+                    timestamp = normalize_datetime(activity['timestamp'])
+                    if timestamp is None:
+                        timestamp = datetime.now()
+                    
+                    # Validate score
+                    score = None
+                    if activity['score'] is not None:
+                        try:
+                            score_val = float(activity['score'])
+                            if 0 <= score_val <= 100:
+                                score = score_val
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Validate duration
+                    duration = None
+                    if activity['duration'] is not None:
+                        try:
+                            duration_val = int(activity['duration'])
+                            if duration_val >= 0:
+                                duration = duration_val
+                        except (ValueError, TypeError):
+                            pass
 
                     activity_items.append(RecentActivityItem(
                         id=numeric_id,
                         activity_type=activity['activity_type'],
-                        title=activity['title'] or "Unknown Activity",
-                        description=activity['description'] or "No description",
-                        timestamp=normalize_datetime(activity['timestamp']) or datetime.now(),
-                        score=float(activity['score']) if activity['score'] is not None else None,
-                        duration=activity['duration']
+                        title=title,
+                        description=description,
+                        timestamp=timestamp,
+                        score=score,
+                        duration=duration
                     ))
+                    
                 except Exception as e:
-                    logger.warning(f"⚠️ Skipping invalid activity: {e}")
+                    logger.warning(f"⚠️ Skipping invalid activity {activity.get('activity_id', 'unknown')}: {e}")
                     continue
 
             # Cache the response
             set_cache(user_id, cache_key_str, activity_items)
             
-            logger.info(f"📋 [ACTIVITY] Retrieved {len(activity_items)} activities for user {user_id[:8]}...")
+            logger.info(f"📋 [ACTIVITY] Retrieved {len(activity_items)} activities for user {user_id[:8]}... (sessions: {len([a for a in activity_items if a.activity_type in ['quiz', 'flashnotes']])}, chats: {len([a for a in activity_items if a.activity_type == 'chat'])})")
             return activity_items
 
     except HTTPException:
