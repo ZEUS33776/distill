@@ -64,7 +64,7 @@ async def check_user_exists(user_id: str) -> bool:
     try:
         async with db.get_connection() as conn:
             result = await conn.fetchval(
-                "SELECT EXISTS(SELECT 1 FROM users WHERE user_id = $1 AND is_active = true)",
+                "SELECT EXISTS(SELECT 1 FROM users WHERE user_id::text = $1 AND is_active = true)",
                 user_id
             )
             return bool(result)
@@ -157,7 +157,7 @@ async def get_optimized_user_stats(user_id: str) -> Dict[str, Any]:
             COUNT(DISTINCT CASE WHEN type = 'flashnotes' THEN session_id END) as flashnote_sessions,
             COUNT(DISTINCT session_id) as total_study_sessions
         FROM study_sessions 
-        WHERE user_id = $1 AND is_active = true
+        WHERE user_id::text = $1 AND is_active = true
     ),
     results_stats AS (
         SELECT 
@@ -170,12 +170,12 @@ async def get_optimized_user_stats(user_id: str) -> Dict[str, Any]:
             COUNT(CASE WHEN session_type = 'quiz' THEN 1 END) as quiz_results,
             COUNT(CASE WHEN session_type = 'flashnotes' THEN 1 END) as flashnote_results
         FROM session_results 
-        WHERE user_id = $1
+        WHERE user_id::text = $1
     ),
     chat_stats AS (
         SELECT COUNT(DISTINCT session_id) as chat_count
         FROM sessions 
-        WHERE user_id = $1 AND is_active = true
+        WHERE user_id::text = $1 AND is_active = true
     )
     SELECT 
         COALESCE(ss.quiz_sessions, 0) as quiz_sessions,
@@ -345,8 +345,8 @@ async def get_recent_activity(
                     sr.time_spent_seconds as duration,
                     'session' as source_type
                 FROM session_results sr
-                LEFT JOIN study_sessions ss ON sr.study_session_id = ss.id
-                WHERE sr.user_id = $1 AND sr.completed_at IS NOT NULL
+                LEFT JOIN study_sessions ss ON sr.study_session_id::text = ss.id::text
+                WHERE sr.user_id::text = $1 AND sr.completed_at IS NOT NULL
                 ORDER BY sr.completed_at DESC
                 LIMIT $2
             )
@@ -362,7 +362,7 @@ async def get_recent_activity(
                     NULL as duration,
                     'chat' as source_type
                 FROM sessions s
-                WHERE s.user_id = $1 AND s.is_active = true AND s.created_at IS NOT NULL
+                WHERE s.user_id::text = $1 AND s.is_active = true AND s.created_at IS NOT NULL
                 ORDER BY s.created_at DESC
                 LIMIT $3
             )

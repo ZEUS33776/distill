@@ -22,7 +22,7 @@ async def process_youtube_video_endpoint(url: str, user_id: str = None, session_
     
     try:
         print(f"🎥 [YT-BACKEND] Starting transcript extraction...")
-        transcript = process_youtube_video(url)
+        transcript = process_youtube_video(url) 
         
         processing_time = time.time() - start_time
         print(f"✅ [YT-BACKEND] Transcript extracted successfully!")
