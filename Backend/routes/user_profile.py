@@ -9,6 +9,7 @@ import asyncio
 import logging
 from functools import wraps
 import time
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/user-profile", tags=["user-profile"])
 
 # Cache for user stats (simple in-memory cache)
 _stats_cache = {}
-_cache_ttl = 300  # 5 minutes
+_cache_ttl = 30  # 30 seconds instead of 5 minutes for faster updates
 
 def cache_key(user_id: str, endpoint: str) -> str:
     """Generate cache key for user data"""
@@ -44,6 +45,20 @@ def set_cache(user_id: str, endpoint: str, data: Any) -> None:
         'timestamp': time.time()
     }
     logger.info(f"💾 [CACHE-SET] {endpoint} for user {user_id[:8]}...")
+
+def invalidate_user_cache(user_id: str) -> None:
+    """Invalidate all cache entries for a specific user"""
+    keys_to_remove = [key for key in _stats_cache.keys() if user_id in key]
+    for key in keys_to_remove:
+        del _stats_cache[key]
+    logger.info(f"🗑️ [CACHE-INVALIDATE] Cleared {len(keys_to_remove)} entries for user {user_id[:8]}...")
+
+def force_refresh_cache(user_id: str, endpoint: str) -> None:
+    """Force refresh cache for specific user and endpoint"""
+    key = cache_key(user_id, endpoint)
+    if key in _stats_cache:
+        del _stats_cache[key]
+        logger.info(f"🔄 [CACHE-REFRESH] Forced refresh for {endpoint} user {user_id[:8]}...")
 
 def validate_user_id(user_id: str) -> str:
     """Validate user ID format and return normalized version"""
@@ -253,7 +268,7 @@ def calculate_overall_progress_from_stats(stats: Dict[str, Any]) -> float:
 
 @router.get("/stats/{user_id}", response_model=UserStatsResponse)
 @performance_monitor
-async def get_user_stats(user_id: str):
+async def get_user_stats(user_id: str, refresh: bool = Query(False, description="Force refresh cache")):
     """
     Get comprehensive user statistics for the profile page.
     Includes caching and optimized database queries.
@@ -261,10 +276,15 @@ async def get_user_stats(user_id: str):
     # Validate and normalize user ID
     user_id = validate_user_id(user_id)
     
-    # Check cache first
-    cached_stats = get_from_cache(user_id, 'stats')
-    if cached_stats:
-        return cached_stats
+    # Force refresh if requested
+    if refresh:
+        force_refresh_cache(user_id, 'stats')
+    
+    # Check cache first (unless refresh is forced)
+    if not refresh:
+        cached_stats = get_from_cache(user_id, 'stats')
+        if cached_stats:
+            return cached_stats
     
     try:
         # Check if user exists
@@ -282,14 +302,14 @@ async def get_user_stats(user_id: str):
         # Build response
         response = UserStatsResponse(
             chats_started=int(stats['chat_count']),
-            quizzes_taken=int(stats['quiz_sessions']),
+            quizzes_taken=int(stats['quiz_results']),  # Use actual quiz results count, not sessions
             study_sessions=int(stats['total_study_sessions']),
             achievements=achievements_count,
             overall_progress=overall_progress,
             total_study_time=int(stats['total_time']),
             avg_quiz_accuracy=float(stats['avg_accuracy']),
             best_quiz_score=float(stats['best_accuracy']),
-            total_flashcards_studied=int(stats['total_questions_answered'])
+            total_flashcards_studied=int(stats['flashnote_results'])  # Use actual flashcard results count
         )
         
         # Cache the response
@@ -308,13 +328,18 @@ async def get_user_stats(user_id: str):
 @performance_monitor
 async def get_recent_activity(
     user_id: str, 
-    limit: int = Query(10, ge=1, le=50, description="Number of activities to return")
+    limit: int = Query(10, ge=1, le=50, description="Number of activities to return"),
+    refresh: bool = Query(False, description="Force refresh cache")
 ):
     """
     Get recent user activity with optimized queries and proper error handling.
     """
     # Validate and normalize user ID
     user_id = validate_user_id(user_id)
+    
+    # Force refresh if requested
+    if refresh:
+        invalidate_user_cache(user_id)
     
     # Check cache first
     cache_key_str = f"activity_{limit}"
@@ -423,12 +448,16 @@ async def get_recent_activity(
 
 @router.get("/achievements/{user_id}", response_model=List[Achievement])
 @performance_monitor
-async def get_user_achievements(user_id: str):
+async def get_user_achievements(user_id: str, refresh: bool = Query(False, description="Force refresh cache")):
     """
     Get user achievements with robust error handling and caching.
     """
     # Validate and normalize user ID
     user_id = validate_user_id(user_id)
+    
+    # Force refresh if requested
+    if refresh:
+        invalidate_user_cache(user_id)
     
     # Check cache first
     cached_achievements = get_from_cache(user_id, 'achievements')
@@ -529,12 +558,16 @@ async def get_user_achievements(user_id: str):
 
 @router.get("/profile/{user_id}", response_model=UserProfileResponse)
 @performance_monitor
-async def get_user_profile(user_id: str):
+async def get_user_profile(user_id: str, refresh: bool = Query(False, description="Force refresh all data")):
     """
     Get complete user profile with parallel data fetching and comprehensive error handling.
     """
     # Validate and normalize user ID
     user_id = validate_user_id(user_id)
+    
+    # Force refresh if requested
+    if refresh:
+        invalidate_user_cache(user_id)
     
     try:
         # Check if user exists first
@@ -542,9 +575,9 @@ async def get_user_profile(user_id: str):
             raise HTTPException(status_code=404, detail="User not found")
         
         # Fetch all profile data in parallel for better performance
-        stats_task = get_user_stats(user_id)
-        activity_task = get_recent_activity(user_id, 10)
-        achievements_task = get_user_achievements(user_id)
+        stats_task = get_user_stats(user_id, refresh=refresh)
+        activity_task = get_recent_activity(user_id, 10, refresh=refresh)
+        achievements_task = get_user_achievements(user_id, refresh=refresh)
         
         # Wait for all tasks to complete
         stats, recent_activity, achievements = await asyncio.gather(
@@ -573,11 +606,12 @@ async def get_user_profile(user_id: str):
             cache_info={
                 'generated_at': datetime.now().isoformat(),
                 'ttl_seconds': _cache_ttl,
-                'user_id_hash': user_id[:8] + '...'
+                'user_id_hash': user_id[:8] + '...',
+                'refreshed': refresh
             }
         )
         
-        logger.info(f"👤 [PROFILE] Complete profile generated for user {user_id[:8]}...")
+        logger.info(f"👤 [PROFILE] Complete profile generated for user {user_id[:8]}... (refresh={refresh})")
         return response
 
     except HTTPException:
@@ -595,12 +629,10 @@ async def clear_user_cache(user_id: str):
     
     try:
         # Remove all cache entries for this user
-        keys_to_remove = [key for key in _stats_cache.keys() if user_id in key]
-        for key in keys_to_remove:
-            del _stats_cache[key]
+        invalidate_user_cache(user_id)
         
-        logger.info(f"🗑️ [CACHE-CLEAR] Cleared {len(keys_to_remove)} cache entries for user {user_id[:8]}...")
-        return {"message": f"Cache cleared for user", "entries_removed": len(keys_to_remove)}
+        logger.info(f"🗑️ [CACHE-CLEAR] Cleared all cache entries for user {user_id[:8]}...")
+        return {"message": f"Cache cleared for user", "entries_removed": len(_stats_cache)}
     
     except Exception as e:
         logger.error(f"❌ Error clearing cache for {user_id}: {e}")
@@ -641,4 +673,125 @@ def calculate_overall_progress(session_counts, results_stats, chat_count) -> flo
         'chat_count': chat_count or 0,
         'avg_accuracy': results_stats.get('avg_accuracy', 0) if results_stats else 0
     }
-    return calculate_overall_progress_from_stats(stats) 
+    return calculate_overall_progress_from_stats(stats)
+
+@router.put("/refresh/{user_id}")
+async def refresh_user_profile(user_id: str):
+    """
+    Force refresh all profile data for a user by clearing cache and fetching fresh data.
+    """
+    user_id = validate_user_id(user_id)
+    
+    try:
+        # Clear all cache for the user
+        invalidate_user_cache(user_id)
+        
+        # Fetch fresh profile data
+        fresh_profile = await get_user_profile(user_id, refresh=True)
+        
+        return {
+            "message": "Profile data refreshed successfully",
+            "user_id": user_id[:8] + "...",
+            "timestamp": datetime.now().isoformat(),
+            "stats": fresh_profile.stats.dict(),
+            "activity_count": len(fresh_profile.recent_activity),
+            "achievements_count": len(fresh_profile.achievements)
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error refreshing profile for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error refreshing user profile")
+
+async def notify_profile_update(user_id: str, reason: str = "data_updated"):
+    """
+    Helper function to automatically invalidate profile cache when user data changes.
+    Call this from other services when:
+    - Quiz is completed
+    - New session is started
+    - Study session is finished
+    - Chat is created
+    - Any user activity that affects profile stats
+    
+    Usage:
+        await notify_profile_update(user_id, "quiz_completed")
+        await notify_profile_update(user_id, "session_started")
+    """
+    try:
+        # Internal cache invalidation (if called from same service)
+        if user_id:
+            invalidate_user_cache(user_id)
+            logger.info(f"🔔 [PROFILE-UPDATE] Notified profile update for user {user_id[:8]}... Reason: {reason}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to notify profile update for {user_id}: {e}")
+
+@router.post("/invalidate-cache/{user_id}")
+async def invalidate_cache_endpoint(user_id: str, reason: str = Query("", description="Reason for cache invalidation")):
+    """
+    Endpoint for other services to invalidate user cache when data changes.
+    
+    INTEGRATION GUIDE:
+    Call this endpoint after any user activity that affects profile data:
+    
+    1. Quiz Completion: POST /user-profile/invalidate-cache/{user_id}?reason=quiz_completed
+    2. Session Start: POST /user-profile/invalidate-cache/{user_id}?reason=session_started  
+    3. Chat Created: POST /user-profile/invalidate-cache/{user_id}?reason=chat_created
+    4. Study Finished: POST /user-profile/invalidate-cache/{user_id}?reason=study_finished
+    
+    This ensures users see updated stats immediately in the profile section.
+    """
+    user_id = validate_user_id(user_id)
+    
+    try:
+        # Clear all cache for the user
+        cache_entries_before = len([k for k in _stats_cache.keys() if user_id in k])
+        invalidate_user_cache(user_id)
+        
+        logger.info(f"🔄 [AUTO-INVALIDATE] Cache cleared for user {user_id[:8]}... Reason: {reason or 'manual'}")
+        
+        return {
+            "message": "Cache invalidated successfully",
+            "user_id": user_id[:8] + "...",
+            "reason": reason or "manual",
+            "timestamp": datetime.now().isoformat(),
+            "entries_cleared": cache_entries_before
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error invalidating cache for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error invalidating user cache")
+
+@router.get("/cache-status/{user_id}")
+async def get_cache_status(user_id: str):
+    """
+    Check cache status for a specific user.
+    """
+    user_id = validate_user_id(user_id)
+    
+    try:
+        user_cache_keys = [k for k in _stats_cache.keys() if user_id in k]
+        cache_entries = {}
+        
+        for key in user_cache_keys:
+            cache_entry = _stats_cache[key]
+            endpoint = key.split(':')[0]
+            age_seconds = time.time() - cache_entry['timestamp']
+            is_valid = is_cache_valid(cache_entry)
+            
+            cache_entries[endpoint] = {
+                "age_seconds": round(age_seconds, 2),
+                "is_valid": is_valid,
+                "expires_in": round(_cache_ttl - age_seconds, 2) if is_valid else 0,
+                "cached_at": datetime.fromtimestamp(cache_entry['timestamp']).isoformat()
+            }
+        
+        return {
+            "user_id": user_id[:8] + "...",
+            "cache_ttl_seconds": _cache_ttl,
+            "total_cache_entries": len(cache_entries),
+            "entries": cache_entries,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Error checking cache status for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error checking cache status") 
