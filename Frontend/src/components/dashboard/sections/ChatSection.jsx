@@ -63,22 +63,44 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
     
     // If it's a string, check if it's JSON that needs parsing
     if (typeof content === 'string') {
+      let jsonContent = content.trim()
+      
+      // Handle JSON wrapped in markdown code blocks
+      if (jsonContent.startsWith('```json') && jsonContent.endsWith('```')) {
+        console.log('Detected JSON in markdown code block, extracting...')
+        jsonContent = jsonContent.slice(7, -3).trim() // Remove ```json and ```
+        console.log('Extracted JSON content:', jsonContent.substring(0, 100) + '...')
+      }
+      // Handle JSON wrapped in generic code blocks
+      else if (jsonContent.startsWith('```') && jsonContent.endsWith('```')) {
+        console.log('Detected content in generic code block, extracting...')
+        const firstNewline = jsonContent.indexOf('\n')
+        if (firstNewline !== -1) {
+          jsonContent = jsonContent.slice(firstNewline + 1, -3).trim()
+        } else {
+          jsonContent = jsonContent.slice(3, -3).trim()
+        }
+        console.log('Extracted content:', jsonContent.substring(0, 100) + '...')
+      }
+      
       // Try to parse if it looks like JSON
-      if (content.trim().startsWith('{') && content.trim().includes('"type"')) {
+      if ((jsonContent.startsWith('{') && jsonContent.includes('"type"')) || 
+          (jsonContent.startsWith('{') && jsonContent.includes('"quiz"')) ||
+          (jsonContent.startsWith('{') && jsonContent.includes('"flashnotes"'))) {
         try {
           console.log('Attempting to parse JSON string')
-          const parsed = JSON.parse(content)
+          const parsed = JSON.parse(jsonContent)
           console.log('Successfully parsed JSON:', parsed)
           
           // Handle quiz objects
           if (parsed.type === 'quiz') {
             console.log('Detected quiz in JSON string')
-            return `Quiz: ${parsed.body?.length || 0} questions`
+            return `Quiz: ${parsed.body?.length || 0} questions generated`
           }
           // Handle flashnotes objects  
           else if (parsed.type === 'flashnotes') {
             console.log('Detected flashnotes in JSON string')
-            return `Flashnotes: ${parsed.body?.flashcards?.length || parsed.body?.notes?.length || parsed.body?.length || 0} notes`
+            return `Flashcards: ${parsed.body?.flashcards?.length || parsed.body?.notes?.length || parsed.body?.length || 0} cards generated`
           }
           // Handle other structured responses
           else if (parsed.body) {
@@ -101,12 +123,12 @@ const MessageBubble = memo(({ message, index, onCopy, onRegenerate, aiLoading })
       // Handle quiz objects
       if (content.type === 'quiz') {
         console.log('Formatting as quiz')
-        return `Quiz: ${content.body?.length || 0} questions`
+        return `Quiz: ${content.body?.length || 0} questions generated`
       } 
       // Handle flashnotes objects
       else if (content.type === 'flashnotes') {
         console.log('Formatting as flashnotes')
-        return `Flashnotes: ${content.body?.flashcards?.length || content.body?.notes?.length || 0} notes`
+        return `Flashcards: ${content.body?.flashcards?.length || content.body?.notes?.length || 0} cards generated`
       } 
       // Handle response objects
       else if (content.type === 'response' && content.body) {
