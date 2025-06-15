@@ -680,34 +680,32 @@ const ChatSection = () => {
         return
       }
 
-
-
-      // Use the response body directly as content
+      // For regular responses, use the response body as content
       let content = response.body
-      console.log('6. Initial content:', content)
-      console.log('7. Initial content type:', typeof content)
+      console.log('Processing regular response content:', content)
+      console.log('Content type:', typeof content)
       
       // Handle any remaining nested JSON strings in the body
       if (typeof content === 'string') {
         try {
           const parsed = JSON.parse(content)
-          console.log('8. Parsed nested JSON:', parsed)
+          console.log('Parsed nested JSON:', parsed)
           // If it's a nested response object, extract the inner body
           if (parsed && typeof parsed === 'object' && parsed.type && parsed.body) {
             content = parsed.body
-            console.log('9. Extracted inner body:', content)
+            console.log('Extracted inner body:', content)
           }
         } catch (e) {
-          console.log('8. Content is not JSON, using as-is')
+          console.log('Content is not JSON, using as-is')
         }
       }
 
-      console.log('10. Final content for message:', content)
-      console.log('11. Final content type:', typeof content)
+      console.log('Final content for message:', content)
+      console.log('Final content type:', typeof content)
       
       // Ensure content is always a string for message storage
       if (typeof content === 'object') {
-        console.log('12. Content is object, converting to string representation')
+        console.log('Content is object, converting to string representation')
         if (content && content.question && content.options) {
           // Handle quiz question objects
           content = `Question: ${content.question}\nOptions: ${(content.options || []).join(', ')}\nAnswer: ${content.answer || 'N/A'}`
@@ -718,10 +716,8 @@ const ChatSection = () => {
           // Handle other objects
           content = `[Generated content: ${Object.keys(content).join(', ')}]`
         }
-        console.log('12a. Converted content:', content)
+        console.log('Converted content:', content)
       }
-      
-      console.log('=========================')
 
       // Create AI response message
       const aiMessage = {
