@@ -591,9 +591,7 @@ const ProfileSection = () => {
                           {activity.description}
                         </p>
                       </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
-                        {getTimeAgo(activity.timestamp)}
-                      </div>
+                      
                     </motion.div>
                   )
                 })
