@@ -340,24 +340,7 @@ const SignUp = () => {
             </div>
 
             {/* Terms and Privacy */}
-            <div className="flex items-start space-x-2">
-              <input 
-                type="checkbox" 
-                required
-                className="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500" 
-              />
-              <p className="text-sm text-gray-600 leading-relaxed">
-                I agree to the{' '}
-                <Link to="/terms" className="text-primary-600 hover:text-primary-700 transition-colors">
-                  Terms of Service
-                </Link>
-                {' '}and{' '}
-                <Link to="/privacy" className="text-primary-600 hover:text-primary-700 transition-colors">
-                  Privacy Policy
-                </Link>
-              </p>
-            </div>
-
+           
             {/* Submit Button */}
             <motion.button
               type="submit"
