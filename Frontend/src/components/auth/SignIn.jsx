@@ -64,8 +64,8 @@ const SignIn = () => {
   }
 
   const demoCredentials = {
-    email: 'demo@distill.ai',
-    password: 'Demo1234!'
+    email: 'demo_distill@distill.ai',
+    password: 'A123456a'
   }
 
   const handleDemoLogin = () => {
